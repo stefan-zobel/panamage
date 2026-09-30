@@ -1,0 +1,38 @@
+# Store text files with LF line endings and check them out with LF on every
+# platform, so that sources, scripts and generated bindings are byte-identical
+# on Windows and Linux.
+* text=auto eol=lf
+
+# Windows command scripts need CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Unix shell scripts must keep LF.
+mvnw text eol=lf
+*.sh text eol=lf
+
+# Language-aware diffs
+*.java text diff=java
+*.py text diff=python
+*.md text diff=markdown
+*.h text diff=cpp
+*.xml text
+*.properties text
+*.txt text
+
+# Test resources are compared byte by byte (reference pixels, EXIF and XMP
+# data, reconstructed JPEG files), so Git must never convert them.
+panamage-jxl/src/test/resources/** -text -diff
+
+# Binary files
+*.jxl binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.rgba binary
+*.jar binary
+*.zip binary
+*.gz binary
+*.dll binary
+*.so binary
+*.so.* binary

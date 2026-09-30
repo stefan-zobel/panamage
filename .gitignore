@@ -1,0 +1,7 @@
+.settings/
+.classpath
+.project
+.tools/
+target/
+dist/
+__pycache__/

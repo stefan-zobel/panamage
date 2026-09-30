@@ -1,0 +1,84 @@
+panamage $version for $platform
+===============================================================================
+
+JPEG XL for Java, based on libjxl $libjxl_version and the Foreign Function and
+Memory API (Project Panama).
+
+This is an early, experimental release for trying things out. The API may
+change in later versions.
+
+
+Requirements
+------------
+* JDK 25 or newer
+* $requirements
+
+
+Contents
+--------
+lib/panamage-jxl-$version.jar             JPEG XL decoder, encoder and lossless
+                                          JPEG transcoding (API: panamage.jxl)
+lib/panamage-jxl-imageio-$version.jar     Image I/O plugin: ImageIO.read and
+                                          ImageIO.write(image, "jxl", ...)
+lib/panamage-jxl-spi-$version.jar         Service interface for the native libraries
+lib/$natives_jar     libjxl native libraries for $platform
+Example.java                              Small example program
+LICENSE                                   License of panamage (BSD-3-Clause)
+licenses/                                 Licenses of the bundled native libraries
+
+The native libraries are extracted automatically to a cache directory
+(panamage-jxl in java.io.tmpdir, or the directory named by the system property
+panamage.jxl.cache.dir). Nothing needs to be installed.
+
+
+Trying it out
+-------------
+Run the example on any image (JPEG, PNG, JPEG XL, ...). It writes a JPEG XL
+copy next to it and, for a JPEG, also a lossless JPEG XL transcoding that
+restores the original JPEG bit for bit.
+
+Class path:
+
+  java --enable-native-access=ALL-UNNAMED -cp "lib/*" Example.java photo.jpg
+
+Module path:
+
+  java --enable-native-access=panamage.jxl --module-path lib --add-modules panamage.jxl Example.java photo.jpg
+
+--enable-native-access allows panamage to call libjxl; without it, the JDK
+prints a warning.
+
+
+Using it in your code
+---------------------
+Put the four JARs on the class path or module path, then:
+
+  BufferedImage image = ImageIO.read(new File("input.jxl"));
+  ImageIO.write(image, "jxl", new File("output.jxl"));          // visually lossless
+
+  byte[] jxl = JxlTranscoder.fromJpeg(jpegBytes);                // lossless, smaller
+  byte[] jpeg = JxlTranscoder.toJpeg(jxl);                       // the original JPEG
+
+  JxlImage pixels = JxlDecoder.decode(jxlBytes);                 // 8-bit RGBA
+  byte[] encoded = JxlEncoder.encode(pixels, JxlEncodeOptions.ofQuality(90));
+
+EXIF and XMP metadata are kept by JxlTranscoder and when an image is copied
+with ImageReader.readAll and ImageWriter.write (IIOImage with metadata); the
+convenience methods ImageIO.read and ImageIO.write do not carry metadata. See
+the Javadoc of JxlImageMetadata, JxlImageWriter and JxlImageWriteParam.
+
+
+Checking the download
+---------------------
+The release page lists SHA-256 checksums in the file SHA256SUMS:
+
+  Linux:    sha256sum -c SHA256SUMS --ignore-missing
+  Windows:  Get-FileHash <file> -Algorithm SHA256
+
+
+License
+-------
+panamage is licensed under the BSD-3-Clause license (see LICENSE). The bundled
+native libraries are libjxl (BSD-3-Clause), Brotli (MIT), Highway (Apache-2.0
+or BSD-3-Clause) and skcms (BSD-3-Clause); their license texts are in the
+licenses directory.

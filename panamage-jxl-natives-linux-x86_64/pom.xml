@@ -1,0 +1,131 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>net.sourceforge.streamsupport</groupId>
+		<artifactId>panamage</artifactId>
+		<version>0.0.1</version>
+	</parent>
+
+	<artifactId>panamage-jxl-natives-linux-x86_64</artifactId>
+	<name>panamage-jxl-natives-linux-x86_64</name>
+	<description>Native libjxl libraries for Linux x86_64 (glibc 2.29 or newer)</description>
+
+	<properties>
+		<!-- Source of the shared libraries and their location inside the JAR. -->
+		<natives.lib.dir>${jxl.native.linux.dir}/lib</natives.lib.dir>
+		<natives.target.dir>${project.build.outputDirectory}/panamage/jxl/natives/linux/x86_64</natives.target.dir>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-spi</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<filtering>true</filtering>
+			</resource>
+		</resources>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>require-native-libraries</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireFilesExist>
+									<message>The libjxl shared libraries for Linux were not found. Run python scripts/fetch_tools.py, or set the PANAMAGE_TOOLS_DIR environment variable or -Dtools.dir to the tools directory.</message>
+									<files>
+										<file>${natives.lib.dir}/libbrotlicommon.so.1</file>
+										<file>${natives.lib.dir}/libbrotlidec.so.1</file>
+										<file>${natives.lib.dir}/libbrotlienc.so.1</file>
+										<file>${natives.lib.dir}/libjxl_cms.so.0.12</file>
+										<file>${natives.lib.dir}/libjxl.so.0.12</file>
+										<file>${natives.lib.dir}/libjxl_threads.so.0.12</file>
+									</files>
+								</requireFilesExist>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy-native-libraries</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${natives.target.dir}</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${natives.lib.dir}</directory>
+									<filtering>false</filtering>
+									<includes>
+										<include>libbrotlicommon.so.1</include>
+										<include>libbrotlidec.so.1</include>
+										<include>libbrotlienc.so.1</include>
+										<include>libjxl_cms.so.0.12</include>
+										<include>libjxl.so.0.12</include>
+										<include>libjxl_threads.so.0.12</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+					<execution>
+						<id>copy-licenses</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.outputDirectory}/META-INF/licenses</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${jxl.native.linux.dir}/licenses</directory>
+									<filtering>false</filtering>
+									<includes>
+										<include>libjxl.copyright</include>
+										<include>brotli.copyright</include>
+									</includes>
+								</resource>
+								<!-- Highway is linked statically into libjxl.so, but the Debian
+								     copyright file does not cover it; its license text comes from
+								     the libjxl distribution for Windows (same project and license). -->
+								<resource>
+									<directory>${jxl.native.dir}/licenses</directory>
+									<filtering>false</filtering>
+									<includes>
+										<include>LICENSE.highway</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>
