@@ -1,8 +1,6 @@
 package panamage.jxl.imageio;
 
-import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.Transparency;
 import java.awt.color.ColorSpace;
 import java.awt.color.ICC_ColorSpace;
 import java.awt.color.ICC_Profile;
@@ -11,6 +9,8 @@ import java.awt.image.ColorModel;
 import java.awt.image.ComponentColorModel;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
+import java.awt.image.DataBufferFloat;
+import java.awt.image.DataBufferUShort;
 import java.awt.image.Raster;
 import java.awt.image.RenderedImage;
 import java.awt.image.WritableRaster;
@@ -20,6 +20,7 @@ import javax.imageio.IIOParam;
 import javax.imageio.ImageTypeSpecifier;
 
 import panamage.jxl.JxlImage;
+import panamage.jxl.JxlSampleType;
 
 /**
  * Conversions between {@link JxlImage} and {@link BufferedImage}.
@@ -54,32 +55,48 @@ final class BufferedImages {
 
     /**
      * Returns the type of the image that {@link #toBufferedImage} creates.
+     * 8-bit sRGB images use the standard types {@code TYPE_BYTE_GRAY},
+     * {@code TYPE_3BYTE_BGR} and {@code TYPE_4BYTE_ABGR}, 16-bit sRGB gray
+     * images {@code TYPE_USHORT_GRAY}; all others are interleaved in the
+     * channel order of the JPEG XL image, in the color space of the ICC
+     * profile, or in sRGB (color) or the default gray color space (gray).
      */
-    static ImageTypeSpecifier imageType(int channels, ColorSpace iccSpace) {
-        if (iccSpace != null) {
-            return ImageTypeSpecifier.createInterleaved(iccSpace, bandOffsets(channels), DataBuffer.TYPE_BYTE,
-                    hasAlpha(channels), false);
+    static ImageTypeSpecifier imageType(int channels, JxlSampleType type, ColorSpace iccSpace) {
+        if (iccSpace == null && type == JxlSampleType.UINT8) {
+            return ImageTypeSpecifier.createFromBufferedImageType(srgbType(channels));
         }
-        return ImageTypeSpecifier.createFromBufferedImageType(srgbType(channels));
+        if (iccSpace == null && type == JxlSampleType.UINT16 && channels == 1) {
+            return ImageTypeSpecifier.createFromBufferedImageType(BufferedImage.TYPE_USHORT_GRAY);
+        }
+        ColorSpace space = iccSpace != null ? iccSpace
+                : ColorSpace.getInstance(channels <= 2 ? ColorSpace.CS_GRAY : ColorSpace.CS_sRGB);
+        return ImageTypeSpecifier.createInterleaved(space, bandOffsets(channels), dataType(type),
+                hasAlpha(channels), false);
     }
 
     /**
-     * Creates a buffered image from decoded pixels. sRGB images use the
-     * standard types {@code TYPE_BYTE_GRAY}, {@code TYPE_3BYTE_BGR} and
-     * {@code TYPE_4BYTE_ABGR}; images with an ICC profile share the pixel
-     * array with a component color model in that color space.
+     * Creates a buffered image of the type given by {@link #imageType} from
+     * decoded pixels. Except for 8-bit sRGB images, the image shares the pixel
+     * array.
      */
     static BufferedImage toBufferedImage(JxlImage image, ColorSpace iccSpace) {
-        int channels = image.channels();
-        if (iccSpace != null) {
-            ComponentColorModel colorModel = new ComponentColorModel(iccSpace, hasAlpha(channels), false,
-                    hasAlpha(channels) ? Transparency.TRANSLUCENT : Transparency.OPAQUE, DataBuffer.TYPE_BYTE);
-            DataBufferByte buffer = new DataBufferByte(image.pixels(), image.pixels().length);
-            WritableRaster raster = Raster.createInterleavedRaster(buffer, image.width(), image.height(),
-                    image.width() * channels, channels, bandOffsets(channels), new Point(0, 0));
-            return new BufferedImage(colorModel, raster, false, null);
-        }
+        return switch (image) {
+            case JxlImage.Uint8 img when iccSpace == null -> toSrgbBufferedImage(img);
+            case JxlImage.Uint8 img -> wrap(img, iccSpace, new DataBufferByte(img.pixels(), img.pixels().length));
+            case JxlImage.Uint16 img -> wrap(img, iccSpace, new DataBufferUShort(img.pixels(), img.pixels().length));
+            case JxlImage.Float32 img -> wrap(img, iccSpace, new DataBufferFloat(img.pixels(), img.pixels().length));
+        };
+    }
 
+    private static BufferedImage wrap(JxlImage image, ColorSpace iccSpace, DataBuffer buffer) {
+        ColorModel colorModel = imageType(image.channels(), image.sampleType(), iccSpace).getColorModel();
+        WritableRaster raster = Raster.createWritableRaster(
+                colorModel.createCompatibleSampleModel(image.width(), image.height()), buffer, null);
+        return new BufferedImage(colorModel, raster, false, null);
+    }
+
+    private static BufferedImage toSrgbBufferedImage(JxlImage.Uint8 image) {
+        int channels = image.channels();
         BufferedImage result = new BufferedImage(image.width(), image.height(), srgbType(channels));
         byte[] target = ((DataBufferByte) result.getRaster().getDataBuffer()).getData();
         byte[] source = image.pixels();
@@ -155,18 +172,110 @@ final class BufferedImages {
     }
 
     /**
-     * Converts any rendered image to 8-bit sRGB samples: gray for
-     * {@code TYPE_BYTE_GRAY}, otherwise RGB, or RGBA if the image has alpha.
+     * Converts a rendered image to a {@link JxlImage}.
+     * <p>
+     * Gray and RGB images with a {@link ComponentColorModel} and 8-bit, 16-bit
+     * or floating point samples keep their precision, their alpha channel
+     * (premultiplied alpha is converted to straight alpha) and their color
+     * space: sRGB and the default gray color space are written as sRGB, other
+     * color spaces with their ICC profile. All other images are converted to
+     * 8-bit sRGB: RGB, or RGBA if the image has alpha.
      */
     static JxlImage toJxlImage(RenderedImage rendered) {
         BufferedImage image = asBufferedImage(rendered);
-        int width = image.getWidth();
-        int height = image.getHeight();
-        if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
-            byte[] gray = (byte[]) image.getRaster().getDataElements(0, 0, width, height, null);
-            return new JxlImage(width, height, 1, gray);
+        JxlImage exact = toExactJxlImage(image);
+        return exact != null ? exact : toSrgbJxlImage(image);
+    }
+
+    /**
+     * Copies the samples of a component image unchanged, or returns
+     * {@code null} if the image has no suitable color model, color space or
+     * sample size.
+     */
+    private static JxlImage toExactJxlImage(BufferedImage image) {
+        if (!(image.getColorModel() instanceof ComponentColorModel colorModel)) {
+            return null;
+        }
+        ColorSpace space = colorModel.getColorSpace();
+        int colorChannels = colorModel.getNumColorComponents();
+        boolean gray = space.getType() == ColorSpace.TYPE_GRAY && colorChannels == 1;
+        boolean rgb = space.getType() == ColorSpace.TYPE_RGB && colorChannels == 3;
+        if (!gray && !rgb) {
+            return null;
+        }
+        byte[] iccProfile;
+        if (space.isCS_sRGB() || space == ColorSpace.getInstance(ColorSpace.CS_GRAY)) {
+            iccProfile = null;
+        } else if (space instanceof ICC_ColorSpace iccSpace) {
+            iccProfile = iccSpace.getProfile().getData();
+        } else {
+            return null;
+        }
+        JxlSampleType type = switch (colorModel.getTransferType()) {
+            case DataBuffer.TYPE_BYTE -> JxlSampleType.UINT8;
+            case DataBuffer.TYPE_USHORT -> JxlSampleType.UINT16;
+            case DataBuffer.TYPE_FLOAT -> JxlSampleType.FLOAT32;
+            default -> null;
+        };
+        if (type == null) {
+            return null;
+        }
+        for (int bits : colorModel.getComponentSize()) {
+            if (bits != type.bytesPerSample() * 8) {
+                return null;
+            }
         }
 
+        WritableRaster raster = image.getRaster();
+        if (colorModel.isAlphaPremultiplied()) {
+            WritableRaster copy = raster.createCompatibleWritableRaster();
+            copy.setRect(raster);
+            colorModel.coerceData(copy, false);
+            raster = copy;
+        }
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int channels = colorModel.getNumComponents();
+        int rowLength = width * channels;
+        return switch (type) {
+            case UINT8 -> {
+                byte[] pixels = new byte[rowLength * height];
+                int[] row = new int[rowLength];
+                for (int y = 0; y < height; y++) {
+                    raster.getPixels(raster.getMinX(), raster.getMinY() + y, width, 1, row);
+                    for (int i = 0; i < rowLength; i++) {
+                        pixels[y * rowLength + i] = (byte) row[i];
+                    }
+                }
+                yield new JxlImage.Uint8(width, height, channels, pixels, iccProfile);
+            }
+            case UINT16 -> {
+                short[] pixels = new short[rowLength * height];
+                int[] row = new int[rowLength];
+                for (int y = 0; y < height; y++) {
+                    raster.getPixels(raster.getMinX(), raster.getMinY() + y, width, 1, row);
+                    for (int i = 0; i < rowLength; i++) {
+                        pixels[y * rowLength + i] = (short) row[i];
+                    }
+                }
+                yield new JxlImage.Uint16(width, height, channels, pixels, iccProfile);
+            }
+            case FLOAT32 -> {
+                float[] pixels = new float[rowLength * height];
+                float[] row = new float[rowLength];
+                for (int y = 0; y < height; y++) {
+                    raster.getPixels(raster.getMinX(), raster.getMinY() + y, width, 1, row);
+                    System.arraycopy(row, 0, pixels, y * rowLength, rowLength);
+                }
+                yield new JxlImage.Float32(width, height, channels, pixels, iccProfile);
+            }
+        };
+    }
+
+    /** Converts any image to 8-bit sRGB samples: RGB, or RGBA if the image has alpha. */
+    private static JxlImage toSrgbJxlImage(BufferedImage image) {
+        int width = image.getWidth();
+        int height = image.getHeight();
         boolean alpha = image.getColorModel().hasAlpha();
         int channels = alpha ? 4 : 3;
         byte[] pixels = new byte[width * height * channels];
@@ -185,7 +294,7 @@ final class BufferedImages {
                 }
             }
         }
-        return new JxlImage(width, height, channels, pixels);
+        return new JxlImage.Uint8(width, height, channels, pixels);
     }
 
     private static BufferedImage asBufferedImage(RenderedImage rendered) {
@@ -203,6 +312,14 @@ final class BufferedImages {
             case 1 -> BufferedImage.TYPE_BYTE_GRAY;
             case 3 -> BufferedImage.TYPE_3BYTE_BGR;
             default -> BufferedImage.TYPE_4BYTE_ABGR;
+        };
+    }
+
+    private static int dataType(JxlSampleType type) {
+        return switch (type) {
+            case UINT8 -> DataBuffer.TYPE_BYTE;
+            case UINT16 -> DataBuffer.TYPE_USHORT;
+            case FLOAT32 -> DataBuffer.TYPE_FLOAT;
         };
     }
 

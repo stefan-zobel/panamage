@@ -206,7 +206,7 @@ public final class JxlImageMetadata extends IIOMetadata {
             return null;
         }
         IIOMetadataNode data = new IIOMetadataNode("Data");
-        data.appendChild(node("SampleFormat", "value", "UnsignedIntegral"));
+        data.appendChild(node("SampleFormat", "value", info.exponentBitsPerSample() > 0 ? "Real" : "UnsignedIntegral"));
         String bits = (info.bitsPerSample() + " ").repeat(info.channels()).strip();
         data.appendChild(node("BitsPerSample", "value", bits));
         return data;

@@ -30,6 +30,9 @@ panamage-jxl/src/test/resources/** -text -diff
 *.jpeg binary
 *.png binary
 *.rgba binary
+*.rgba16 binary
+*.rgbf32 binary
+*.pfm binary
 *.jar binary
 *.zip binary
 *.gz binary

@@ -1,7 +1,9 @@
 package panamage.jxl;
 
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_FLOAT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
+import static java.lang.foreign.ValueLayout.JAVA_SHORT;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.foreign.Arena;
@@ -22,7 +24,12 @@ import panamage.jxl.ffi.JxlPixelFormat;
  * height always describe the upright image. Lossless images are returned in
  * their original color space; lossy images in their original color space if
  * libjxl can convert to it, otherwise in sRGB. If the returned pixels are not
- * sRGB, {@link JxlImage#iccProfile()} describes their color space.
+ * sRGB, {@link JxlImage#iccProfile()} describes their color space; it may
+ * depend on the requested sample type.
+ * <p>
+ * The pixels can be decoded to 8-bit, 16-bit or floating point samples,
+ * independent of the bit depth of the image; {@link JxlImageInfo#sampleType()}
+ * gives the type that represents the image without loss.
  * <p>
  * The decoder uses libjxl's native thread pool, so no Java code is called back
  * from native threads. For animations, only the first frame is returned.
@@ -61,8 +68,9 @@ public final class JxlDecoder {
                 } else if (status == Jxl.JXL_DEC_COLOR_ENCODING() && info != null) {
                     return new JxlImageInfo(JxlBasicInfo.xsize(info), JxlBasicInfo.ysize(info),
                             JxlBasicInfo.num_color_channels(info), JxlBasicInfo.alpha_bits(info) > 0,
-                            JxlBasicInfo.bits_per_sample(info), JxlBasicInfo.have_animation(info) != 0,
-                            outputProfile(handle, arena));
+                            JxlBasicInfo.bits_per_sample(info), JxlBasicInfo.exponent_bits_per_sample(info),
+                            JxlBasicInfo.have_animation(info) != 0,
+                            outputProfile(handle, false, arena));
                 } else {
                     throw NativeDecoder.failure(status);
                 }
@@ -178,7 +186,7 @@ public final class JxlDecoder {
      * @return the decoded image with 4 channels
      * @throws JxlException if the data is not a valid JPEG XL image
      */
-    public static JxlImage decode(byte[] data) {
+    public static JxlImage.Uint8 decode(byte[] data) {
         return decode(data, RGBA);
     }
 
@@ -198,11 +206,48 @@ public final class JxlDecoder {
      * @throws IllegalArgumentException if {@code channels} is not 1 to 4
      * @throws JxlException             if the data is not a valid JPEG XL image
      */
-    public static JxlImage decode(byte[] data, int channels) {
+    public static JxlImage.Uint8 decode(byte[] data, int channels) {
+        return (JxlImage.Uint8) decode(data, channels, JxlSampleType.UINT8);
+    }
+
+    /**
+     * Decodes a JPEG XL image (codestream or container) to the given sample
+     * type.
+     * <p>
+     * Use {@link JxlImageInfo#channels()} and {@link JxlImageInfo#sampleType()}
+     * to get the image without loss. Samples are scaled to the requested type:
+     * an 8-bit image decoded to 16 bits has values up to 65535, and floating
+     * point samples are nominally in the range 0.0 to 1.0. Converting
+     * floating point samples beyond that range to integers clips them.
+     * <p>
+     * The returned image is a {@link JxlImage.Uint8}, {@link JxlImage.Uint16}
+     * or {@link JxlImage.Float32}, according to {@code type}.
+     *
+     * @param data     the encoded image
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @return the decoded image
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlException             if the data is not a valid JPEG XL image
+     */
+    public static JxlImage decode(byte[] data, int channels, JxlSampleType type) {
+        return decode(data, channels, type, false);
+    }
+
+    /**
+     * Like {@link #decode(byte[], int, JxlSampleType)}; with
+     * {@code keepSrgbProfile}, the image also carries libjxl's ICC profile of
+     * sRGB pixels instead of {@code null} (the conformance tests compare it
+     * with the reference profile).
+     */
+    static JxlImage decode(byte[] data, int channels, JxlSampleType type, boolean keepSrgbProfile) {
         Objects.requireNonNull(data, "data");
+        Objects.requireNonNull(type, "type");
         checkChannels(channels);
         try (Arena arena = Arena.ofConfined()) {
-            return decode(arena.allocateFrom(JAVA_BYTE, data), channels, arena);
+            return decode(arena.allocateFrom(JAVA_BYTE, data), channels, type, keepSrgbProfile, arena);
         }
     }
 
@@ -216,11 +261,11 @@ public final class JxlDecoder {
      * @return the decoded image with 4 channels
      * @throws JxlException if the data is not a valid JPEG XL image
      */
-    public static JxlImage decode(MemorySegment data) {
+    public static JxlImage.Uint8 decode(MemorySegment data) {
         Objects.requireNonNull(data, "data");
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = data.isNative() ? data : arena.allocate(data.byteSize()).copyFrom(data);
-            return decode(input, RGBA, arena);
+            return (JxlImage.Uint8) decode(input, RGBA, JxlSampleType.UINT8, false, arena);
         }
     }
 
@@ -230,24 +275,28 @@ public final class JxlDecoder {
         }
     }
 
-    private static JxlImage decode(MemorySegment input, int channels, Arena arena) {
+    private static JxlImage decode(MemorySegment input, int channels, JxlSampleType type, boolean keepSrgbProfile,
+            Arena arena) {
         try (NativeDecoder decoder = NativeDecoder.create()) {
+            // JxlImage promises straight alpha, also for images stored with premultiplied alpha.
+            NativeDecoder.check(Jxl.JxlDecoderSetUnpremultiplyAlpha(decoder.handle(), Jxl.JXL_TRUE()),
+                    "JxlDecoderSetUnpremultiplyAlpha");
             decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING() | Jxl.JXL_DEC_FULL_IMAGE(),
                     input);
-            return run(decoder.handle(), channels, arena);
+            return run(decoder.handle(), channels, type, keepSrgbProfile, arena);
         }
     }
 
-    private static JxlImage run(MemorySegment decoder, int channels, Arena arena) {
+    private static JxlImage run(MemorySegment decoder, int channels, JxlSampleType type, boolean keepSrgbProfile,
+            Arena arena) {
         MemorySegment format = arena.allocate(JxlPixelFormat.layout());
         JxlPixelFormat.num_channels(format, channels);
-        JxlPixelFormat.data_type(format, Jxl.JXL_TYPE_UINT8());
+        JxlPixelFormat.data_type(format, type.dataType());
         JxlPixelFormat.endianness(format, Jxl.JXL_NATIVE_ENDIAN());
         JxlPixelFormat.align(format, 0L);
 
         int width = 0;
         int height = 0;
-        byte[] iccProfile = null;
         MemorySegment pixels = null;
         while (true) {
             int status = Jxl.JxlDecoderProcessInput(decoder);
@@ -256,16 +305,17 @@ public final class JxlDecoder {
                 width = JxlBasicInfo.xsize(info);
                 height = JxlBasicInfo.ysize(info);
             } else if (status == Jxl.JXL_DEC_COLOR_ENCODING()) {
-                iccProfile = outputProfile(decoder, arena);
+                // The profile is read after decoding, when it describes the produced pixels.
+                continue;
             } else if (status == Jxl.JXL_DEC_NEED_IMAGE_OUT_BUFFER()) {
                 MemorySegment sizeOut = arena.allocate(JAVA_LONG);
                 NativeDecoder.check(Jxl.JxlDecoderImageOutBufferSize(decoder, format, sizeOut),
                         "JxlDecoderImageOutBufferSize");
                 long size = sizeOut.get(JAVA_LONG, 0L);
-                if (size > Integer.MAX_VALUE - 8) {
-                    throw new JxlException("Image too large for a byte array: " + size + " bytes");
+                if (size / type.bytesPerSample() > Integer.MAX_VALUE - 8) {
+                    throw new JxlException("Image too large for a Java array: " + size + " bytes");
                 }
-                pixels = arena.allocate(size);
+                pixels = arena.allocate(size, type.bytesPerSample());
                 NativeDecoder.check(Jxl.JxlDecoderSetImageOutBuffer(decoder, format, pixels, size),
                         "JxlDecoderSetImageOutBuffer");
             } else if (status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS()) {
@@ -277,7 +327,12 @@ public final class JxlDecoder {
         if (pixels == null) {
             throw new JxlException("The JPEG XL data contains no image");
         }
-        return new JxlImage(width, height, channels, pixels.toArray(JAVA_BYTE), iccProfile);
+        byte[] iccProfile = outputProfile(decoder, keepSrgbProfile, arena);
+        return switch (type) {
+            case UINT8 -> new JxlImage.Uint8(width, height, channels, pixels.toArray(JAVA_BYTE), iccProfile);
+            case UINT16 -> new JxlImage.Uint16(width, height, channels, pixels.toArray(JAVA_SHORT), iccProfile);
+            case FLOAT32 -> new JxlImage.Float32(width, height, channels, pixels.toArray(JAVA_FLOAT), iccProfile);
+        };
     }
 
     private static MemorySegment basicInfo(MemorySegment decoder, Arena arena) {
@@ -288,12 +343,14 @@ public final class JxlDecoder {
 
     /**
      * Returns the ICC profile of the pixels the decoder produces, or
-     * {@code null} if they are sRGB. Valid after the COLOR_ENCODING event.
+     * {@code null} if they are sRGB and {@code keepSrgbProfile} is false.
+     * Valid after the COLOR_ENCODING event.
      */
-    private static byte[] outputProfile(MemorySegment decoder, Arena arena) {
+    private static byte[] outputProfile(MemorySegment decoder, boolean keepSrgbProfile, Arena arena) {
         MemorySegment encoding = arena.allocate(JxlColorEncoding.layout());
         int target = Jxl.JXL_COLOR_PROFILE_TARGET_DATA();
-        if (Jxl.JxlDecoderGetColorAsEncodedProfile(decoder, target, encoding) == Jxl.JXL_DEC_SUCCESS()
+        if (!keepSrgbProfile
+                && Jxl.JxlDecoderGetColorAsEncodedProfile(decoder, target, encoding) == Jxl.JXL_DEC_SUCCESS()
                 && isSrgb(encoding)) {
             return null;
         }

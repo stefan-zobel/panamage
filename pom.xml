@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>net.sourceforge.streamsupport</groupId>
 	<artifactId>panamage</artifactId>
-	<version>0.0.1</version>
+	<version>0.1.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
 	<licenses>
@@ -33,6 +33,8 @@
 		<jxl.native.dir>${tools.dir}/libjxl-0.12.0</jxl.native.dir>
 		<!-- libjxl and Brotli shared libraries for Linux x86_64 (lib, licenses). -->
 		<jxl.native.linux.dir>${tools.dir}/libjxl-0.12.0-linux-x86_64</jxl.native.linux.dir>
+		<!-- Test cases of the JPEG XL conformance corpus; the conformance tests are skipped without them. -->
+		<conformance.dir>${tools.dir}/conformance-b1d0f99</conformance.dir>
 		<libjxl.version>0.12.0</libjxl.version>
 		<junit.version>6.1.3</junit.version>
 	</properties>

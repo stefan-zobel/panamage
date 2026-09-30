@@ -1,6 +1,8 @@
 package panamage.jxl;
 
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_FLOAT;
+import static java.lang.foreign.ValueLayout.JAVA_SHORT;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -15,11 +17,14 @@ import panamage.jxl.ffi.JxlPixelFormat;
 /**
  * Encodes images to JPEG XL in one call.
  * <p>
- * The input is an 8-bit {@link JxlImage} with 1 to 4 channels (gray, gray and
- * alpha, RGB or RGBA) in sRGB or in the color space of its ICC profile; the
- * profile must match the channels (gray or RGB). The output is a bare JPEG XL
- * codestream. The encoder uses libjxl's native thread pool, so no Java code is
- * called back from native threads.
+ * The input is a {@link JxlImage} with 8-bit, 16-bit or floating point samples
+ * and 1 to 4 channels (gray, gray and alpha, RGB or RGBA) in sRGB or in the
+ * color space of its ICC profile; the profile must match the channels (gray or
+ * RGB). The image is stored with the bit depth of its sample type, so lossless
+ * encoding reproduces every sample exactly, including floating point values
+ * outside the range 0.0 to 1.0. The output is a bare JPEG XL codestream. The
+ * encoder uses libjxl's native thread pool, so no Java code is called back from
+ * native threads.
  */
 public final class JxlEncoder {
 
@@ -114,12 +119,13 @@ public final class JxlEncoder {
         Jxl.JxlEncoderInitBasicInfo(info);
         JxlBasicInfo.xsize(info, image.width());
         JxlBasicInfo.ysize(info, image.height());
-        JxlBasicInfo.bits_per_sample(info, 8);
-        JxlBasicInfo.exponent_bits_per_sample(info, 0);
+        JxlSampleType type = image.sampleType();
+        JxlBasicInfo.bits_per_sample(info, type.bits());
+        JxlBasicInfo.exponent_bits_per_sample(info, type.exponentBits());
         JxlBasicInfo.num_color_channels(info, gray ? 1 : 3);
         JxlBasicInfo.num_extra_channels(info, alpha ? 1 : 0);
-        JxlBasicInfo.alpha_bits(info, alpha ? 8 : 0);
-        JxlBasicInfo.alpha_exponent_bits(info, 0);
+        JxlBasicInfo.alpha_bits(info, alpha ? type.bits() : 0);
+        JxlBasicInfo.alpha_exponent_bits(info, alpha ? type.exponentBits() : 0);
         JxlBasicInfo.orientation(info, orientation);
         // Lossless encoding must keep the original color space instead of converting to XYB.
         JxlBasicInfo.uses_original_profile(info, options.lossless() ? Jxl.JXL_TRUE() : Jxl.JXL_FALSE());
@@ -147,11 +153,15 @@ public final class JxlEncoder {
 
         MemorySegment format = arena.allocate(JxlPixelFormat.layout());
         JxlPixelFormat.num_channels(format, image.channels());
-        JxlPixelFormat.data_type(format, Jxl.JXL_TYPE_UINT8());
+        JxlPixelFormat.data_type(format, image.sampleType().dataType());
         JxlPixelFormat.endianness(format, Jxl.JXL_NATIVE_ENDIAN());
         JxlPixelFormat.align(format, 0L);
 
-        MemorySegment pixels = arena.allocateFrom(JAVA_BYTE, image.pixels());
+        MemorySegment pixels = switch (image) {
+            case JxlImage.Uint8 img -> arena.allocateFrom(JAVA_BYTE, img.pixels());
+            case JxlImage.Uint16 img -> arena.allocateFrom(JAVA_SHORT, img.pixels());
+            case JxlImage.Float32 img -> arena.allocateFrom(JAVA_FLOAT, img.pixels());
+        };
         encoder.check(Jxl.JxlEncoderAddImageFrame(settings, format, pixels, pixels.byteSize()),
                 "JxlEncoderAddImageFrame");
     }

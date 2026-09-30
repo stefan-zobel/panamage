@@ -17,7 +17,7 @@ class JxlDecoderTest {
 
     @Test
     void decodesLosslessImageBitExact() {
-        JxlImage image = JxlDecoder.decode(TestImages.gradientJxl());
+        JxlImage.Uint8 image = JxlDecoder.decode(TestImages.gradientJxl());
 
         assertEquals(TestImages.WIDTH, image.width());
         assertEquals(TestImages.HEIGHT, image.height());
@@ -29,14 +29,14 @@ class JxlDecoderTest {
     void decodesFromNativeSegment() {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment segment = arena.allocateFrom(ValueLayout.JAVA_BYTE, TestImages.gradientJxl());
-            JxlImage image = JxlDecoder.decode(segment);
+            JxlImage.Uint8 image = JxlDecoder.decode(segment);
             assertArrayEquals(TestImages.gradientRgbaPixels(), image.pixels());
         }
     }
 
     @Test
     void decodesFromHeapSegment() {
-        JxlImage image = JxlDecoder.decode(MemorySegment.ofArray(TestImages.gradientJxl()));
+        JxlImage.Uint8 image = JxlDecoder.decode(MemorySegment.ofArray(TestImages.gradientJxl()));
         assertArrayEquals(TestImages.gradientRgbaPixels(), image.pixels());
     }
 
@@ -66,7 +66,7 @@ class JxlDecoderTest {
 
     @Test
     void decodesToRgbWithoutAlpha() {
-        JxlImage image = JxlDecoder.decode(TestImages.gradientJxl(), 3);
+        JxlImage.Uint8 image = JxlDecoder.decode(TestImages.gradientJxl(), 3);
 
         assertEquals(3, image.channels());
         byte[] rgba = TestImages.gradientRgbaPixels();
@@ -80,11 +80,11 @@ class JxlDecoderTest {
 
     @Test
     void decodesGrayImagesToTheirNaturalChannelCount() {
-        JxlImage gray = TestImages.gradientChannels(1);
+        JxlImage.Uint8 gray = TestImages.gradientChannels(1);
         byte[] encoded = JxlEncoder.encode(gray, JxlEncodeOptions.ofLossless());
 
         JxlImageInfo info = JxlDecoder.readInfo(encoded);
-        JxlImage decoded = JxlDecoder.decode(encoded, info.channels());
+        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, info.channels());
 
         assertEquals(1, info.channels());
         assertTrue(decoded.isSrgb());

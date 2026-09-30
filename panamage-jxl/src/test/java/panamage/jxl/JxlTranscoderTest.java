@@ -50,7 +50,7 @@ class JxlTranscoderTest {
     @ParameterizedTest
     @FieldSource("panamage.jxl.TestImages#PHOTO_JPEGS")
     void transcodedFileDecodesToPixels(String name) {
-        JxlImage image = JxlDecoder.decode(JxlTranscoder.fromJpeg(TestImages.resource(name)));
+        JxlImage.Uint8 image = JxlDecoder.decode(JxlTranscoder.fromJpeg(TestImages.resource(name)));
 
         assertEquals(TestImages.PHOTO_WIDTH, image.width());
         assertEquals(TestImages.PHOTO_HEIGHT, image.height());

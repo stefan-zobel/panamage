@@ -34,11 +34,11 @@ class IccProfileTest {
 
     @Test
     void losslessImagesKeepTheirColorSpace() throws IOException {
-        JxlImage linear = linearRgbImage();
+        JxlImage.Uint8 linear = linearRgbImage();
         byte[] encoded = JxlEncoder.encode(linear, JxlEncodeOptions.ofLossless());
         save("linear-rgb-lossless.jxl", encoded);
 
-        JxlImage decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
 
         assertFalse(decoded.isSrgb());
         assertArrayEquals(linear.pixels(), decoded.pixels());
@@ -48,7 +48,7 @@ class IccProfileTest {
 
     @Test
     void imageReaderAttachesTheProfile() throws IOException {
-        JxlImage linear = linearRgbImage();
+        JxlImage.Uint8 linear = linearRgbImage();
         byte[] encoded = JxlEncoder.encode(linear, JxlEncodeOptions.ofLossless());
 
         BufferedImage image = JxlImageReaderTest.read(encoded);
@@ -69,7 +69,7 @@ class IccProfileTest {
     void lossyImagesDecodeToPixelsThatMatchTheirProfile() {
         byte[] encoded = JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofDistance(1.0f));
 
-        JxlImage decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
 
         // libjxl may return lossy images in sRGB or in their original color space;
         // either way, pixels and profile together must describe linear 128 (sRGB 188).
@@ -95,7 +95,7 @@ class IccProfileTest {
     }
 
     /** A gray ramp from 0 to 240 in linear RGB, as RGB samples. */
-    private static JxlImage linearRgbImage() {
+    private static JxlImage.Uint8 linearRgbImage() {
         byte[] pixels = new byte[WIDTH * HEIGHT * 3];
         for (int y = 0; y < HEIGHT; y++) {
             for (int x = 0; x < WIDTH; x++) {
@@ -107,7 +107,7 @@ class IccProfileTest {
             }
         }
         byte[] profile = ICC_Profile.getInstance(ColorSpace.CS_LINEAR_RGB).getData();
-        return new JxlImage(WIDTH, HEIGHT, 3, pixels, profile);
+        return new JxlImage.Uint8(WIDTH, HEIGHT, 3, pixels, profile);
     }
 
     private static void save(String name, byte[] data) throws IOException {

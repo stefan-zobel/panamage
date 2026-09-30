@@ -59,7 +59,7 @@ Put the four JARs on the class path or module path, then:
   byte[] jxl = JxlTranscoder.fromJpeg(jpegBytes);                // lossless, smaller
   byte[] jpeg = JxlTranscoder.toJpeg(jxl);                       // the original JPEG
 
-  JxlImage pixels = JxlDecoder.decode(jxlBytes);                 // 8-bit RGBA
+  JxlImage.Uint8 pixels = JxlDecoder.decode(jxlBytes);           // 8-bit RGBA
   byte[] encoded = JxlEncoder.encode(pixels, JxlEncodeOptions.ofQuality(90));
 
 EXIF and XMP metadata are kept by JxlTranscoder and when an image is copied

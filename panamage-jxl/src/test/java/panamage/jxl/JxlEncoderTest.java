@@ -21,7 +21,7 @@ class JxlEncoderTest {
         byte[] encoded = JxlEncoder.encode(TestImages.gradientRgba(), JxlEncodeOptions.ofLossless());
         save("gradient-lossless.jxl", encoded);
 
-        JxlImage decoded = JxlDecoder.decode(encoded);
+        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded);
 
         assertEquals(TestImages.WIDTH, decoded.width());
         assertEquals(TestImages.HEIGHT, decoded.height());
@@ -30,9 +30,9 @@ class JxlEncoderTest {
 
     @Test
     void losslessRgbRoundTripIsBitExactWithOpaqueAlpha() {
-        JxlImage rgb = TestImages.gradientChannels(0, 1, 2);
+        JxlImage.Uint8 rgb = TestImages.gradientChannels(0, 1, 2);
 
-        JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(rgb, JxlEncodeOptions.ofLossless()));
+        JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(rgb, JxlEncodeOptions.ofLossless()));
 
         byte[] rgba = decoded.pixels();
         for (int p = 0; p < TestImages.WIDTH * TestImages.HEIGHT; p++) {
@@ -45,9 +45,9 @@ class JxlEncoderTest {
 
     @Test
     void losslessGrayRoundTripIsBitExact() {
-        JxlImage gray = TestImages.gradientChannels(1);
+        JxlImage.Uint8 gray = TestImages.gradientChannels(1);
 
-        JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(gray, JxlEncodeOptions.ofLossless()));
+        JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(gray, JxlEncodeOptions.ofLossless()));
 
         byte[] rgba = decoded.pixels();
         for (int p = 0; p < TestImages.WIDTH * TestImages.HEIGHT; p++) {
@@ -61,9 +61,9 @@ class JxlEncoderTest {
 
     @Test
     void losslessGrayAlphaRoundTripIsBitExact() {
-        JxlImage grayAlpha = TestImages.gradientChannels(1, 3);
+        JxlImage.Uint8 grayAlpha = TestImages.gradientChannels(1, 3);
 
-        JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(grayAlpha, JxlEncodeOptions.ofLossless()));
+        JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(grayAlpha, JxlEncodeOptions.ofLossless()));
 
         byte[] rgba = decoded.pixels();
         for (int p = 0; p < TestImages.WIDTH * TestImages.HEIGHT; p++) {
@@ -80,7 +80,7 @@ class JxlEncoderTest {
         byte[] encoded = JxlEncoder.encode(TestImages.gradientRgba(), JxlEncodeOptions.ofDistance(1.0f));
         save("gradient-d1.jxl", encoded);
 
-        JxlImage decoded = JxlDecoder.decode(encoded);
+        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded);
 
         assertEquals(TestImages.WIDTH, decoded.width());
         assertEquals(TestImages.HEIGHT, decoded.height());
@@ -91,7 +91,7 @@ class JxlEncoderTest {
 
     @Test
     void defaultOptionsProduceADecodableImage() {
-        JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientChannels(0, 1, 2)));
+        JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientChannels(0, 1, 2)));
         assertEquals(TestImages.WIDTH, decoded.width());
         assertEquals(TestImages.HEIGHT, decoded.height());
     }
@@ -101,7 +101,7 @@ class JxlEncoderTest {
         JxlEncodeOptions options = JxlEncodeOptions.ofQuality(90);
         assertTrue(!options.lossless() && options.distance() > 0.0f);
 
-        JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientRgba(), options));
+        JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientRgba(), options));
 
         assertEquals(TestImages.WIDTH, decoded.width());
         assertEquals(TestImages.HEIGHT, decoded.height());
@@ -112,7 +112,7 @@ class JxlEncoderTest {
         JxlEncodeOptions options = JxlEncodeOptions.ofQuality(100);
         assertTrue(options.lossless());
 
-        JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientRgba(), options));
+        JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientRgba(), options));
 
         assertArrayEquals(TestImages.gradientRgbaPixels(), decoded.pixels());
     }
@@ -121,7 +121,7 @@ class JxlEncoderTest {
     void everyEffortLevelProducesALosslessImage() {
         for (int effort = JxlEncodeOptions.MIN_EFFORT; effort <= JxlEncodeOptions.MAX_EFFORT; effort++) {
             JxlEncodeOptions options = JxlEncodeOptions.ofLossless().withEffort(effort);
-            JxlImage decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientRgba(), options));
+            JxlImage.Uint8 decoded = JxlDecoder.decode(JxlEncoder.encode(TestImages.gradientRgba(), options));
             assertArrayEquals(TestImages.gradientRgbaPixels(), decoded.pixels(), "effort " + effort);
         }
     }
@@ -156,7 +156,7 @@ class JxlEncoderTest {
 
     @Test
     void rejectsMoreThanFourChannels() {
-        JxlImage fiveChannels = new JxlImage(2, 2, 5, new byte[2 * 2 * 5]);
+        JxlImage.Uint8 fiveChannels = new JxlImage.Uint8(2, 2, 5, new byte[2 * 2 * 5]);
         assertThrows(IllegalArgumentException.class, () -> JxlEncoder.encode(fiveChannels));
     }
 

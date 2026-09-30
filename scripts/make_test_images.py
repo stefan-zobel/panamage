@@ -14,6 +14,15 @@ All files are checked in under panamage-jxl/src/test/resources.
 Also writes photo-orient6-xmp.jpg (EXIF orientation 6 and an XMP packet) for
 the metadata tests.
 
+For the tests with more than 8 bits per sample:
+  * gradient16.png (64x48, 16-bit RGBA) and gradient16.jxl, converted
+    losslessly with cjxl; gradient16.rgba16 holds the samples as raw
+    little-endian uint16 values
+  * gradient-float.jxl (64x48, float32 RGB with values above 1.0 and below
+    0.0), converted losslessly with cjxl from a temporary PFM file;
+    gradient-float.rgbf32 holds the samples as raw little-endian float32
+    values, top row first
+
 Usage:
   python make_test_images.py [--tools DIR]
 """
@@ -24,6 +33,7 @@ import random
 import struct
 import subprocess
 import sys
+import tempfile
 import zlib
 from pathlib import Path
 
@@ -45,6 +55,19 @@ def pixel(x: int, y: int) -> tuple[int, int, int, int]:
     return (x * 4) & 0xFF, (y * 5) & 0xFF, (x * 2 + y * 3) & 0xFF, 255 - ((x + y) & 0x7F)
 
 
+def pixel16(x: int, y: int) -> tuple[int, int, int, int]:
+    """16-bit RGBA value at (x, y); high and low bytes differ so byte order mix-ups are detected."""
+    return ((x * 1031 + y * 17) & 0xFFFF,
+            (y * 1361 + x * 7 + 0x0100) & 0xFFFF,
+            (x * y * 97 + 0x1234) & 0xFFFF,
+            0xFFFF - (((x + y) * 509) & 0x7FFF))
+
+
+def pixel_float(x: int, y: int) -> tuple[float, float, float]:
+    """Float RGB value at (x, y), including values above 1.0 and below 0.0."""
+    return x / (WIDTH - 1) * 1.5, y / (HEIGHT - 1), (x + y) / (WIDTH + HEIGHT - 2) * 0.8 - 0.1
+
+
 def png_chunk(kind: bytes, data: bytes) -> bytes:
     crc = zlib.crc32(kind + data) & 0xFFFFFFFF
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", crc)
@@ -59,16 +82,46 @@ def write_rgba(path: Path) -> None:
     print(f"Wrote {path}")
 
 
-def write_png(path: Path) -> None:
+def write_png(path: Path, rows: list[bytes] | None = None, bit_depth: int = 8) -> None:
+    """Writes an RGBA PNG; rows hold big-endian samples of the given bit depth."""
     # Each scanline is prefixed with filter type 0 (none).
-    raw = b"".join(b"\x00" + row for row in rgba_rows())
-    header = struct.pack(">IIBBBBB", WIDTH, HEIGHT, 8, 6, 0, 0, 0)  # 8-bit RGBA
+    raw = b"".join(b"\x00" + row for row in (rows if rows is not None else rgba_rows()))
+    header = struct.pack(">IIBBBBB", WIDTH, HEIGHT, bit_depth, 6, 0, 0, 0)  # RGBA
     data = (b"\x89PNG\r\n\x1a\n"
             + png_chunk(b"IHDR", header)
             + png_chunk(b"IDAT", zlib.compress(raw, 9))
             + png_chunk(b"IEND", b""))
     path.write_bytes(data)
     print(f"Wrote {path}")
+
+
+def write_16bit_images(cjxl: Path) -> None:
+    samples = [[pixel16(x, y) for x in range(WIDTH)] for y in range(HEIGHT)]
+    png = RESOURCES_DIR / "gradient16.png"
+    write_png(png, [b"".join(struct.pack(">4H", *p) for p in row) for row in samples], 16)
+    raw = RESOURCES_DIR / "gradient16.rgba16"
+    raw.write_bytes(b"".join(struct.pack("<4H", *p) for row in samples for p in row))
+    print(f"Wrote {raw}")
+    convert_lossless(cjxl, png, RESOURCES_DIR / "gradient16.jxl")
+
+
+def write_float_images(cjxl: Path) -> None:
+    samples = [[pixel_float(x, y) for x in range(WIDTH)] for y in range(HEIGHT)]
+    raw = RESOURCES_DIR / "gradient-float.rgbf32"
+    raw.write_bytes(b"".join(struct.pack("<3f", *p) for row in samples for p in row))
+    print(f"Wrote {raw}")
+    with tempfile.TemporaryDirectory() as temp:
+        # PFM: a negative scale means little endian; rows are stored bottom to top.
+        pfm = Path(temp) / "gradient-float.pfm"
+        pfm.write_bytes(f"PF\n{WIDTH} {HEIGHT}\n-1.0\n".encode("ascii")
+                        + b"".join(struct.pack("<3f", *p) for row in reversed(samples) for p in row))
+        convert_lossless(cjxl, pfm, RESOURCES_DIR / "gradient-float.jxl")
+
+
+def convert_lossless(cjxl: Path, source: Path, jxl: Path) -> None:
+    subprocess.run([str(cjxl), "--distance=0", "--effort=7", "--quiet", str(source), str(jxl)],
+                   check=True)
+    print(f"Wrote {jxl} ({jxl.stat().st_size} bytes)")
 
 
 def photo_pixels() -> bytes:
@@ -90,7 +143,7 @@ def photo_pixels() -> bytes:
     return bytes(out)
 
 
-XMP_PACKET = """<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+XMP_PACKET = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -173,10 +226,10 @@ def main() -> int:
     jxl = RESOURCES_DIR / "gradient.jxl"
     write_png(png)
     write_rgba(RESOURCES_DIR / "gradient.rgba")
-    subprocess.run([str(cjxl), "--distance=0", "--effort=7", "--quiet", str(png), str(jxl)],
-                   check=True)
-    print(f"Wrote {jxl} ({jxl.stat().st_size} bytes)")
+    convert_lossless(cjxl, png, jxl)
     write_jpegs(cjxl)
+    write_16bit_images(cjxl)
+    write_float_images(cjxl)
     return 0
 
 

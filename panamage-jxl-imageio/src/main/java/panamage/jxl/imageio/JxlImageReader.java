@@ -2,8 +2,10 @@ package panamage.jxl.imageio;
 
 import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBuffer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -18,18 +20,31 @@ import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlException;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlImageInfo;
+import panamage.jxl.JxlSampleType;
 
 /**
  * Reads JPEG XL images with libjxl.
  * <p>
- * Images are decoded with 8 bits per sample, upright according to their
- * orientation. sRGB images become {@code TYPE_BYTE_GRAY},
- * {@code TYPE_3BYTE_BGR} or {@code TYPE_4BYTE_ABGR}; images in another color
- * space (typically lossless wide-gamut images) keep their ICC profile in the
- * color model. Of an animation, only the first frame is read.
+ * Images are decoded upright according to their orientation, with the
+ * precision of the image: up to 8 bits per sample as bytes, up to 16 bits as
+ * unsigned shorts, floating point samples (and integers with more than 16
+ * bits) as floats. 8-bit sRGB images become {@code TYPE_BYTE_GRAY},
+ * {@code TYPE_3BYTE_BGR} or {@code TYPE_4BYTE_ABGR}, 16-bit sRGB gray images
+ * {@code TYPE_USHORT_GRAY}; all others use a component color model with
+ * interleaved samples. Images in another color space than sRGB (typically
+ * lossless wide-gamut images) keep their ICC profile in the color model. Of an
+ * animation, only the first frame is read.
  * <p>
- * {@link ImageReadParam} source regions and subsampling are supported;
- * destination settings and band selection are ignored. Image metadata
+ * Floating point samples are not clipped: HDR values above 1.0 and small
+ * negative values from lossy encoding are kept. Java 2D does not clip them
+ * either, so {@code getRGB} and drawing may show wrong colors for such
+ * samples; request 8 or 16 bits with {@link ImageReadParam#setDestinationType}
+ * for display.
+ * <p>
+ * {@link ImageReadParam} source regions and subsampling are supported, and
+ * {@link ImageReadParam#setDestinationType} selects another precision from
+ * {@link #getImageTypes}, for example 8 bits for a 16-bit image. Destination
+ * images and band selection are ignored. Image metadata
  * ({@link JxlImageMetadata}) provides EXIF, XMP and the ICC profile.
  */
 public final class JxlImageReader extends ImageReader {
@@ -75,12 +90,41 @@ public final class JxlImageReader extends ImageReader {
         return info().height();
     }
 
+    /**
+     * Returns the type with the precision of the image first, followed by the
+     * types with the other sample types (8-bit, 16-bit, floating point).
+     */
     @Override
     public Iterator<ImageTypeSpecifier> getImageTypes(int imageIndex) throws IOException {
         checkIndex(imageIndex);
         JxlImageInfo imageInfo = info();
         ColorSpace iccSpace = iccColorSpace(imageInfo.iccProfile(), imageInfo.channels());
-        return List.of(BufferedImages.imageType(imageInfo.channels(), iccSpace)).iterator();
+        List<ImageTypeSpecifier> types = new ArrayList<>();
+        types.add(BufferedImages.imageType(imageInfo.channels(), imageInfo.sampleType(), iccSpace));
+        for (JxlSampleType type : JxlSampleType.values()) {
+            if (type != imageInfo.sampleType()) {
+                types.add(BufferedImages.imageType(imageInfo.channels(), type, iccSpace));
+            }
+        }
+        return types.iterator();
+    }
+
+    /**
+     * Returns the sample type selected by the data type of the parameter's
+     * destination type, or the sample type of the image.
+     */
+    private JxlSampleType sampleType(ImageReadParam param) throws IOException {
+        ImageTypeSpecifier destinationType = param == null ? null : param.getDestinationType();
+        if (destinationType == null) {
+            return info().sampleType();
+        }
+        // Only the data type matters: color spaces from ICC profiles do not compare equal.
+        return switch (destinationType.getSampleModel().getDataType()) {
+            case DataBuffer.TYPE_BYTE -> JxlSampleType.UINT8;
+            case DataBuffer.TYPE_USHORT -> JxlSampleType.UINT16;
+            case DataBuffer.TYPE_FLOAT -> JxlSampleType.FLOAT32;
+            default -> throw new IIOException("Unsupported destination type; use one of getImageTypes");
+        };
     }
 
     @Override
@@ -112,6 +156,7 @@ public final class JxlImageReader extends ImageReader {
         clearAbortRequest();
         processImageStarted(imageIndex);
         JxlImageInfo imageInfo = info();
+        JxlSampleType type = sampleType(param);
         if (abortRequested()) {
             processReadAborted();
             return null;
@@ -119,7 +164,7 @@ public final class JxlImageReader extends ImageReader {
 
         JxlImage decoded;
         try {
-            decoded = JxlDecoder.decode(data(), imageInfo.channels());
+            decoded = JxlDecoder.decode(data(), imageInfo.channels(), type);
         } catch (JxlException e) {
             throw new IIOException("Cannot decode JPEG XL image: " + e.getMessage(), e);
         }

@@ -21,10 +21,14 @@ import panamage.jxl.JxlMetadata;
 /**
  * Writes JPEG XL images with libjxl.
  * <p>
- * Images are converted to 8-bit sRGB: {@code TYPE_BYTE_GRAY} is written as
- * gray, every other type as RGB, or as RGBA if it has alpha. Images with more
- * than 8 bits per sample are reduced to 8 bits. Source regions and
- * subsampling of the write parameter are supported.
+ * Gray and RGB images with a {@link java.awt.image.ComponentColorModel} and
+ * 8-bit, 16-bit or floating point samples (for example {@code TYPE_BYTE_GRAY},
+ * {@code TYPE_USHORT_GRAY}, {@code TYPE_3BYTE_BGR}, {@code TYPE_4BYTE_ABGR} and
+ * the images of the JDK's PNG reader) are written with their precision, alpha
+ * channel and color space; a color space other than sRGB is stored as ICC
+ * profile. All other images, such as {@code TYPE_INT_RGB} or indexed images,
+ * are converted to 8-bit sRGB: RGB, or RGBA if they have alpha. Source regions
+ * and subsampling of the write parameter are supported.
  * <p>
  * EXIF and XMP are written from {@link JxlImageMetadata} or from the metadata
  * of the JDK's JPEG reader, so {@code readAll} on a JPEG followed by

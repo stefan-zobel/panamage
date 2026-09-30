@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Arrays;
@@ -63,7 +64,7 @@ class JxlImageReaderTest {
         for (int i = 0; i < gray.length; i++) {
             gray[i] = (byte) (i * 2);
         }
-        byte[] encoded = JxlEncoder.encode(new JxlImage(16, 8, 1, gray), JxlEncodeOptions.ofLossless());
+        byte[] encoded = JxlEncoder.encode(new JxlImage.Uint8(16, 8, 1, gray), JxlEncodeOptions.ofLossless());
 
         BufferedImage image = read(encoded);
 
@@ -78,7 +79,7 @@ class JxlImageReaderTest {
             grayAlpha[p * 2] = (byte) (p * 30);
             grayAlpha[p * 2 + 1] = (byte) (255 - p * 20);
         }
-        byte[] encoded = JxlEncoder.encode(new JxlImage(4, 2, 2, grayAlpha), JxlEncodeOptions.ofLossless());
+        byte[] encoded = JxlEncoder.encode(new JxlImage.Uint8(4, 2, 2, grayAlpha), JxlEncodeOptions.ofLossless());
 
         BufferedImage image = read(encoded);
 
@@ -120,6 +121,8 @@ class JxlImageReaderTest {
         assertEquals(Resources.GRADIENT_HEIGHT, reader.getHeight(0));
         Iterator<ImageTypeSpecifier> types = reader.getImageTypes(0);
         assertEquals(BufferedImage.TYPE_4BYTE_ABGR, types.next().getBufferedImageType());
+        assertEquals(DataBuffer.TYPE_USHORT, types.next().getSampleModel().getDataType());
+        assertEquals(DataBuffer.TYPE_FLOAT, types.next().getSampleModel().getDataType());
         assertFalse(types.hasNext());
         assertThrows(IndexOutOfBoundsException.class, () -> reader.getWidth(1));
         assertThrows(IndexOutOfBoundsException.class, () -> reader.read(1));

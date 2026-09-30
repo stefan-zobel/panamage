@@ -25,8 +25,9 @@ public final class JxlImageWriterSpi extends ImageWriterSpi {
     }
 
     /**
-     * Every image type can be written: images are converted to 8-bit gray,
-     * RGB or RGBA in sRGB.
+     * Every image type can be written: gray and RGB images with a component
+     * color model keep their precision and color space, all others are
+     * converted to 8-bit RGB or RGBA in sRGB.
      */
     @Override
     public boolean canEncodeImage(ImageTypeSpecifier type) {

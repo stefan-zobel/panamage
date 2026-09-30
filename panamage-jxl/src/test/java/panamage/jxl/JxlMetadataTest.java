@@ -83,10 +83,10 @@ class JxlMetadataTest {
         }
         JxlMetadata metadata = new JxlMetadata(ExifTest.tiff(false, 6), null);
 
-        byte[] encoded = JxlEncoder.encode(new JxlImage(width, height, 3, pixels), JxlEncodeOptions.ofLossless(),
+        byte[] encoded = JxlEncoder.encode(new JxlImage.Uint8(width, height, 3, pixels), JxlEncodeOptions.ofLossless(),
                 metadata);
         save("orientation-6.jxl", encoded);
-        JxlImage decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
 
         // Orientation 6 rotates 90 degrees clockwise: the result is 2x4, and the
         // pixel at (x', y') comes from (x = y', y = height - 1 - x').
