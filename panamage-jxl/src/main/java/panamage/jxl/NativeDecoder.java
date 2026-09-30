@@ -7,12 +7,13 @@ import java.lang.foreign.MemorySegment;
 import panamage.jxl.ffi.Jxl;
 
 /**
- * Owns a native {@code JxlDecoder} together with its thread pool.
+ * Owns a native {@code JxlDecoder} together with its thread pool, if any.
  * <p>
  * Closing destroys the decoder first and then the thread pool it refers to.
  */
 final class NativeDecoder implements AutoCloseable {
 
+    /** The thread pool, or {@code null} for a decoder that runs on the calling thread. */
     private final ParallelRunner runner;
     private final MemorySegment handle;
 
@@ -43,6 +44,21 @@ final class NativeDecoder implements AutoCloseable {
             throw e;
         }
         return decoder;
+    }
+
+    /**
+     * Creates a decoder that runs on the calling thread, for reading headers
+     * without the cost of starting a thread pool.
+     *
+     * @return the new decoder
+     * @throws JxlException if the decoder cannot be created
+     */
+    static NativeDecoder createWithoutThreads() {
+        MemorySegment handle = Jxl.JxlDecoderCreate(NULL);
+        if (handle.equals(NULL)) {
+            throw new JxlException("JxlDecoderCreate failed");
+        }
+        return new NativeDecoder(null, handle);
     }
 
     MemorySegment handle() {
@@ -88,7 +104,9 @@ final class NativeDecoder implements AutoCloseable {
         try {
             Jxl.JxlDecoderDestroy(handle);
         } finally {
-            runner.close();
+            if (runner != null) {
+                runner.close();
+            }
         }
     }
 }

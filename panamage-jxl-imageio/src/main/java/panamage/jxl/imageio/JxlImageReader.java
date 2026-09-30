@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 import javax.imageio.IIOException;
 import javax.imageio.ImageReadParam;
@@ -20,6 +21,7 @@ import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlException;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlImageInfo;
+import panamage.jxl.JxlLimits;
 import panamage.jxl.JxlSampleType;
 
 /**
@@ -46,11 +48,22 @@ import panamage.jxl.JxlSampleType;
  * {@link #getImageTypes}, for example 8 bits for a 16-bit image. Destination
  * images and band selection are ignored. Image metadata
  * ({@link JxlImageMetadata}) provides EXIF, XMP and the ICC profile.
+ * <p>
+ * Images and metadata boxes beyond the reader's {@link JxlLimits} (by default
+ * {@link JxlLimits#defaults()}: 256 megapixels and 16 MiB per metadata box)
+ * are rejected with an {@link IIOException} caused by a
+ * {@link panamage.jxl.JxlLimitException}, before their memory is allocated.
+ * The width and height can still be queried. The limits can be set per reader:
+ * {@snippet :
+ * ImageReader reader = ImageIO.getImageReadersByFormatName("jxl").next();
+ * ((JxlImageReader) reader).setLimits(JxlLimits.defaults().withMaxPixels(50_000_000));
+ * }
  */
 public final class JxlImageReader extends ImageReader {
 
     private static final int READ_CHUNK_SIZE = 64 * 1024;
 
+    private JxlLimits limits = JxlLimits.defaults();
     private byte[] data;
     private JxlImageInfo info;
     private JxlImageMetadata metadata;
@@ -62,6 +75,25 @@ public final class JxlImageReader extends ImageReader {
      */
     public JxlImageReader(JxlImageReaderSpi provider) {
         super(provider);
+    }
+
+    /**
+     * Sets the limits for decoding images and reading metadata. They stay in
+     * effect for later inputs, until {@link #reset()}.
+     *
+     * @param limits the new limits
+     */
+    public void setLimits(JxlLimits limits) {
+        this.limits = Objects.requireNonNull(limits, "limits");
+    }
+
+    /**
+     * Returns the limits for decoding images and reading metadata.
+     *
+     * @return the current limits
+     */
+    public JxlLimits getLimits() {
+        return limits;
     }
 
     @Override
@@ -142,7 +174,7 @@ public final class JxlImageReader extends ImageReader {
         if (metadata == null) {
             JxlImageInfo imageInfo = info();
             try {
-                metadata = new JxlImageMetadata(imageInfo, JxlDecoder.readMetadata(data()), true);
+                metadata = new JxlImageMetadata(imageInfo, JxlDecoder.readMetadata(data(), limits), true);
             } catch (JxlException e) {
                 throw new IIOException("Cannot read JPEG XL metadata: " + e.getMessage(), e);
             }
@@ -164,7 +196,7 @@ public final class JxlImageReader extends ImageReader {
 
         JxlImage decoded;
         try {
-            decoded = JxlDecoder.decode(data(), imageInfo.channels(), type);
+            decoded = JxlDecoder.decode(data(), imageInfo.channels(), type, limits);
         } catch (JxlException e) {
             throw new IIOException("Cannot decode JPEG XL image: " + e.getMessage(), e);
         }
@@ -182,9 +214,11 @@ public final class JxlImageReader extends ImageReader {
         return image;
     }
 
+    /** Also restores the default limits. */
     @Override
     public void reset() {
         super.reset();
+        limits = JxlLimits.defaults();
         data = null;
         info = null;
         metadata = null;

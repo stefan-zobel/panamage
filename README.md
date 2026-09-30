@@ -30,6 +30,9 @@ bundled; nothing needs to be installed.
 - **Image I/O plugin** with reader, writer, write parameters (lossy/lossless,
   quality, effort) and image metadata. 16-bit and floating point images are
   read and written with full precision.
+- **Protection against decompression bombs:** images beyond 256 megapixels and
+  metadata boxes beyond 16 MiB are rejected before their memory is allocated;
+  both limits are configurable.
 - **Bundled native libraries** for Windows and Linux on x86_64 and for macOS
   on Apple silicon, found through a service interface on both the class path
   and the module path.
@@ -131,6 +134,38 @@ byte[] lossy = JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90).withEffor
 
 `JxlDecoder.decode(data)` and `decode(data, channels)` return 8-bit samples
 (`JxlImage.Uint8`).
+
+### Limits for untrusted input
+
+A JPEG XL file of a few hundred bytes can declare an image of a billion
+pixels. libjxl allocates the pixels in native memory, which `-Xmx` does not
+bound, so panamage checks the size first and throws a `JxlLimitException`
+(a `JxlException`; an `IIOException` caused by it in Image I/O):
+
+- **Pixels:** by default at most 2^28 (256 megapixels, for example
+  16384 x 16384), for the image and for every layer of the first frame (a layer
+  may be larger than the image). Images with more than 4 channels, including
+  extra channels, count once for every 4 channels started.
+- **Metadata:** by default at most 16 MiB for each EXIF or XMP box after
+  decompression.
+
+```java
+JxlLimits limits = JxlLimits.defaults().withMaxPixels(50_000_000);
+JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8, limits);
+((JxlImageReader) reader).setLimits(limits);                    // Image I/O
+```
+
+The defaults can be changed with the system properties
+`panamage.jxl.max.pixels` and `panamage.jxl.max.metadata.bytes`;
+`JxlLimits.unlimited()` turns the checks off for trusted input.
+`JxlDecoder.readInfo` is not limited and reports the size without allocating
+the pixels.
+
+The limits bound what libjxl reports through its API. libjxl does not report
+the size of reference frames, which only serve as a source for other frames,
+so a hostile file can still make libjxl allocate more than the limit. For
+fully untrusted input, decoding in a separate process with a memory limit is
+the strongest protection.
 
 ## Native libraries
 

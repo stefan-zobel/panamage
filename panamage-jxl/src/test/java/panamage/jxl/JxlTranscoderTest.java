@@ -74,8 +74,8 @@ class JxlTranscoderTest {
         byte[] jxl = JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, 997);
 
         assertArrayEquals(JxlTranscoder.fromJpeg(jpeg), jxl);
-        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 331));
-        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1));
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 331, JxlLimits.defaults()));
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1, JxlLimits.defaults()));
     }
 
     @Test

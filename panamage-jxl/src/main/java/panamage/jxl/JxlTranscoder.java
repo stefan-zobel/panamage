@@ -19,6 +19,9 @@ import panamage.jxl.ffi.Jxl;
  * <p>
  * The result of {@code fromJpeg} is a regular JPEG XL image that
  * {@link JxlDecoder} decodes to pixels as well.
+ * <p>
+ * {@code toJpeg} rejects images beyond the pixel limit of {@link JxlLimits}
+ * with a {@link JxlLimitException}, like {@link JxlDecoder}.
  */
 public final class JxlTranscoder {
 
@@ -78,26 +81,49 @@ public final class JxlTranscoder {
      *
      * @param jxl the JPEG XL file
      * @return the original JPEG file
-     * @throws JxlException if the data is not valid JPEG XL or contains no JPEG
-     *                      reconstruction data
+     * @throws JxlLimitException if the image exceeds the default limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
      */
     public static byte[] toJpeg(byte[] jxl) {
-        return toJpeg(jxl, OUTPUT_CHUNK_SIZE);
+        return toJpeg(jxl, JxlLimits.defaults());
     }
 
     /**
-     * Like {@link #toJpeg(byte[])}, with a given output buffer size (tests use
-     * a small size to exercise the multi-chunk path).
+     * Like {@link #toJpeg(byte[])}, with the given limits.
+     *
+     * @param jxl    the JPEG XL file
+     * @param limits the limits; only {@link JxlLimits#maxPixels()} applies
+     * @return the original JPEG file
+     * @throws JxlLimitException if the image exceeds the limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
      */
-    static byte[] toJpeg(byte[] jxl, int chunkSize) {
+    public static byte[] toJpeg(byte[] jxl, JxlLimits limits) {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits);
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlLimits)}, with a given output buffer size
+     * (tests use a small size to exercise the multi-chunk path).
+     */
+    static byte[] toJpeg(byte[] jxl, int chunkSize, JxlLimits limits) {
         Objects.requireNonNull(jxl, "jxl");
+        Objects.requireNonNull(limits, "limits");
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
-        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.create()) {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment input = arena.allocateFrom(JAVA_BYTE, jxl);
+            JxlDecoder.checkFrames(input, limits, arena);
+            return reconstruct(input, chunkSize, arena);
+        }
+    }
+
+    private static byte[] reconstruct(MemorySegment input, int chunkSize, Arena arena) {
+        try (NativeDecoder decoder = NativeDecoder.create()) {
             MemorySegment handle = decoder.handle();
-            decoder.start(Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(),
-                    arena.allocateFrom(JAVA_BYTE, jxl));
+            decoder.start(Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(), input);
 
             MemorySegment chunk = arena.allocate(chunkSize);
             ByteArrayOutputStream out = new ByteArrayOutputStream();

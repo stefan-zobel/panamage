@@ -15,6 +15,8 @@ import java.util.Objects;
 import panamage.jxl.ffi.Jxl;
 import panamage.jxl.ffi.JxlBasicInfo;
 import panamage.jxl.ffi.JxlColorEncoding;
+import panamage.jxl.ffi.JxlFrameHeader;
+import panamage.jxl.ffi.JxlLayerInfo;
 import panamage.jxl.ffi.JxlPixelFormat;
 
 /**
@@ -33,6 +35,10 @@ import panamage.jxl.ffi.JxlPixelFormat;
  * <p>
  * The decoder uses libjxl's native thread pool, so no Java code is called back
  * from native threads. For animations, only the first frame is returned.
+ * <p>
+ * Images and metadata boxes beyond the {@link JxlLimits} are rejected with a
+ * {@link JxlLimitException} before their memory is allocated; the methods
+ * without a {@code JxlLimits} parameter use {@link JxlLimits#defaults()}.
  */
 public final class JxlDecoder {
 
@@ -87,18 +93,34 @@ public final class JxlDecoder {
      *
      * @param data the encoded image
      * @return the metadata, or {@link JxlMetadata#NONE} for a bare codestream
-     * @throws JxlException if the data is not a valid JPEG XL image
+     * @throws JxlLimitException if a metadata box exceeds the default limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
      */
     public static JxlMetadata readMetadata(byte[] data) {
-        return readMetadata(data, BOX_CHUNK_SIZE);
+        return readMetadata(data, JxlLimits.defaults());
     }
 
     /**
-     * Like {@link #readMetadata(byte[])}, with a given initial buffer size
-     * (tests use a small size to exercise the multi-chunk path).
+     * Like {@link #readMetadata(byte[])}, with the given limits.
+     *
+     * @param data   the encoded image
+     * @param limits the limits; only {@link JxlLimits#maxMetadataBytes()}
+     *               applies
+     * @return the metadata, or {@link JxlMetadata#NONE} for a bare codestream
+     * @throws JxlLimitException if a metadata box exceeds the limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
      */
-    static JxlMetadata readMetadata(byte[] data, int chunkSize) {
+    public static JxlMetadata readMetadata(byte[] data, JxlLimits limits) {
+        return readMetadata(data, BOX_CHUNK_SIZE, limits);
+    }
+
+    /**
+     * Like {@link #readMetadata(byte[], JxlLimits)}, with a given initial
+     * buffer size (tests use a small size to exercise the multi-chunk path).
+     */
+    static JxlMetadata readMetadata(byte[] data, int chunkSize, JxlLimits limits) {
         Objects.requireNonNull(data, "data");
+        Objects.requireNonNull(limits, "limits");
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
@@ -128,15 +150,17 @@ public final class JxlDecoder {
                                 "JxlDecoderSetBoxBuffer");
                     }
                 } else if (status == Jxl.JXL_DEC_BOX_NEED_MORE_OUTPUT()) {
-                    if (drainBox(handle, chunk, box) == 0) {
-                        // Grow the buffer if the decoder could not write anything into it.
+                    if (drainBox(handle, chunk, box, currentType, limits) == 0) {
+                        // Grow the buffer if the decoder could not write anything into it;
+                        // the box then holds more than the buffer can take.
+                        limits.checkMetadata(currentType, box.size() + chunk.byteSize() + 1L);
                         chunk = arena.allocate(Math.multiplyExact(chunk.byteSize(), 2L));
                     }
                     NativeDecoder.check(Jxl.JxlDecoderSetBoxBuffer(handle, chunk, chunk.byteSize()),
                             "JxlDecoderSetBoxBuffer");
                 } else if (status == Jxl.JXL_DEC_BOX_COMPLETE() || status == Jxl.JXL_DEC_SUCCESS()) {
                     if (box != null) {
-                        drainBox(handle, chunk, box);
+                        drainBox(handle, chunk, box, currentType, limits);
                         if (EXIF_BOX.equals(currentType)) {
                             exif = exifFromBox(box.toByteArray());
                         } else {
@@ -155,10 +179,16 @@ public final class JxlDecoder {
         }
     }
 
-    /** Releases the box buffer and appends the bytes written to it. */
-    private static long drainBox(MemorySegment decoder, MemorySegment chunk, ByteArrayOutputStream out) {
+    /**
+     * Releases the box buffer and appends the bytes written to it.
+     *
+     * @throws JxlLimitException if the box grows beyond the metadata limit
+     */
+    private static long drainBox(MemorySegment decoder, MemorySegment chunk, ByteArrayOutputStream out,
+            String boxType, JxlLimits limits) {
         long unused = Jxl.JxlDecoderReleaseBoxBuffer(decoder);
         long written = chunk.byteSize() - unused;
+        limits.checkMetadata(boxType, out.size() + written);
         out.write(chunk.asSlice(0L, written).toArray(JAVA_BYTE), 0, (int) written);
         return written;
     }
@@ -184,7 +214,8 @@ public final class JxlDecoder {
      *
      * @param data the encoded image
      * @return the decoded image with 4 channels
-     * @throws JxlException if the data is not a valid JPEG XL image
+     * @throws JxlLimitException if the image exceeds the default limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
      */
     public static JxlImage.Uint8 decode(byte[] data) {
         return decode(data, RGBA);
@@ -204,6 +235,7 @@ public final class JxlDecoder {
      *                 has none
      * @return the decoded image
      * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the image exceeds the default limits
      * @throws JxlException             if the data is not a valid JPEG XL image
      */
     public static JxlImage.Uint8 decode(byte[] data, int channels) {
@@ -230,24 +262,45 @@ public final class JxlDecoder {
      * @param type     the sample type to produce
      * @return the decoded image
      * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the image exceeds the default limits
      * @throws JxlException             if the data is not a valid JPEG XL image
      */
     public static JxlImage decode(byte[] data, int channels, JxlSampleType type) {
-        return decode(data, channels, type, false);
+        return decode(data, channels, type, JxlLimits.defaults());
     }
 
     /**
-     * Like {@link #decode(byte[], int, JxlSampleType)}; with
+     * Like {@link #decode(byte[], int, JxlSampleType)}, with the given limits.
+     *
+     * @param data     the encoded image
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param limits   the limits; only {@link JxlLimits#maxPixels()} applies
+     * @return the decoded image
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the image exceeds the limits
+     * @throws JxlException             if the data is not a valid JPEG XL image
+     */
+    public static JxlImage decode(byte[] data, int channels, JxlSampleType type, JxlLimits limits) {
+        return decode(data, channels, type, limits, false);
+    }
+
+    /**
+     * Like {@link #decode(byte[], int, JxlSampleType, JxlLimits)}; with
      * {@code keepSrgbProfile}, the image also carries libjxl's ICC profile of
      * sRGB pixels instead of {@code null} (the conformance tests compare it
      * with the reference profile).
      */
-    static JxlImage decode(byte[] data, int channels, JxlSampleType type, boolean keepSrgbProfile) {
+    static JxlImage decode(byte[] data, int channels, JxlSampleType type, JxlLimits limits,
+            boolean keepSrgbProfile) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(limits, "limits");
         checkChannels(channels);
         try (Arena arena = Arena.ofConfined()) {
-            return decode(arena.allocateFrom(JAVA_BYTE, data), channels, type, keepSrgbProfile, arena);
+            return decode(arena.allocateFrom(JAVA_BYTE, data), channels, type, limits, keepSrgbProfile, arena);
         }
     }
 
@@ -259,13 +312,28 @@ public final class JxlDecoder {
      *
      * @param data the encoded image
      * @return the decoded image with 4 channels
-     * @throws JxlException if the data is not a valid JPEG XL image
+     * @throws JxlLimitException if the image exceeds the default limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
      */
     public static JxlImage.Uint8 decode(MemorySegment data) {
+        return decode(data, JxlLimits.defaults());
+    }
+
+    /**
+     * Like {@link #decode(MemorySegment)}, with the given limits.
+     *
+     * @param data   the encoded image
+     * @param limits the limits; only {@link JxlLimits#maxPixels()} applies
+     * @return the decoded image with 4 channels
+     * @throws JxlLimitException if the image exceeds the limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
+     */
+    public static JxlImage.Uint8 decode(MemorySegment data, JxlLimits limits) {
         Objects.requireNonNull(data, "data");
+        Objects.requireNonNull(limits, "limits");
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = data.isNative() ? data : arena.allocate(data.byteSize()).copyFrom(data);
-            return (JxlImage.Uint8) decode(input, RGBA, JxlSampleType.UINT8, false, arena);
+            return (JxlImage.Uint8) decode(input, RGBA, JxlSampleType.UINT8, limits, false, arena);
         }
     }
 
@@ -275,20 +343,77 @@ public final class JxlDecoder {
         }
     }
 
-    private static JxlImage decode(MemorySegment input, int channels, JxlSampleType type, boolean keepSrgbProfile,
-            Arena arena) {
+    private static JxlImage decode(MemorySegment input, int channels, JxlSampleType type, JxlLimits limits,
+            boolean keepSrgbProfile, Arena arena) {
+        checkFrames(input, limits, arena);
         try (NativeDecoder decoder = NativeDecoder.create()) {
             // JxlImage promises straight alpha, also for images stored with premultiplied alpha.
             NativeDecoder.check(Jxl.JxlDecoderSetUnpremultiplyAlpha(decoder.handle(), Jxl.JXL_TRUE()),
                     "JxlDecoderSetUnpremultiplyAlpha");
             decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING() | Jxl.JXL_DEC_FULL_IMAGE(),
                     input);
-            return run(decoder.handle(), channels, type, keepSrgbProfile, arena);
+            return run(decoder.handle(), channels, type, limits, keepSrgbProfile, arena);
         }
     }
 
-    private static JxlImage run(MemorySegment decoder, int channels, JxlSampleType type, boolean keepSrgbProfile,
-            Arena arena) {
+    /**
+     * Checks the image and the layers of its first frame against the pixel
+     * limit, without decoding pixels.
+     * <p>
+     * A layer may be larger than the image, and with coalescing, which the
+     * actual decoding uses, libjxl reports every frame with the size of the
+     * image. So a separate decoder without coalescing reads the frame headers
+     * first. Invalid or truncated data ends the check silently; the actual
+     * decoding reports it.
+     *
+     * @throws JxlLimitException if the image or a layer exceeds the limit
+     */
+    static void checkFrames(MemorySegment input, JxlLimits limits, Arena arena) {
+        if (limits.maxPixels() == Long.MAX_VALUE) {
+            return;
+        }
+        try (NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
+            MemorySegment handle = decoder.handle();
+            NativeDecoder.check(Jxl.JxlDecoderSetCoalescing(handle, Jxl.JXL_FALSE()), "JxlDecoderSetCoalescing");
+            decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_FRAME(), input);
+            MemorySegment header = arena.allocate(JxlFrameHeader.layout());
+            int channels = 0;
+            while (true) {
+                int status = Jxl.JxlDecoderProcessInput(handle);
+                if (status == Jxl.JXL_DEC_BASIC_INFO()) {
+                    MemorySegment info = basicInfo(handle, arena);
+                    channels = checkImage(info, limits);
+                } else if (status == Jxl.JXL_DEC_FRAME()) {
+                    NativeDecoder.check(Jxl.JxlDecoderGetFrameHeader(handle, header), "JxlDecoderGetFrameHeader");
+                    MemorySegment layer = JxlFrameHeader.layer_info(header);
+                    limits.checkPixels("Frame layer", Integer.toUnsignedLong(JxlLayerInfo.xsize(layer)),
+                            Integer.toUnsignedLong(JxlLayerInfo.ysize(layer)), channels);
+                    // Decoding stops after the first displayed frame, so later layers do not matter.
+                    if (JxlFrameHeader.duration(header) != 0 || JxlFrameHeader.is_last(header) != 0) {
+                        return;
+                    }
+                } else {
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks the size of the image against the pixel limit.
+     *
+     * @return the number of color and extra channels
+     * @throws JxlLimitException if the image exceeds the limit
+     */
+    private static int checkImage(MemorySegment info, JxlLimits limits) {
+        int channels = JxlBasicInfo.num_color_channels(info) + JxlBasicInfo.num_extra_channels(info);
+        limits.checkPixels("Image", Integer.toUnsignedLong(JxlBasicInfo.xsize(info)),
+                Integer.toUnsignedLong(JxlBasicInfo.ysize(info)), channels);
+        return channels;
+    }
+
+    private static JxlImage run(MemorySegment decoder, int channels, JxlSampleType type, JxlLimits limits,
+            boolean keepSrgbProfile, Arena arena) {
         MemorySegment format = arena.allocate(JxlPixelFormat.layout());
         JxlPixelFormat.num_channels(format, channels);
         JxlPixelFormat.data_type(format, type.dataType());
@@ -302,6 +427,7 @@ public final class JxlDecoder {
             int status = Jxl.JxlDecoderProcessInput(decoder);
             if (status == Jxl.JXL_DEC_BASIC_INFO()) {
                 MemorySegment info = basicInfo(decoder, arena);
+                checkImage(info, limits);
                 width = JxlBasicInfo.xsize(info);
                 height = JxlBasicInfo.ysize(info);
             } else if (status == Jxl.JXL_DEC_COLOR_ENCODING()) {

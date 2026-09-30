@@ -64,8 +64,8 @@ class JxlMetadataTest {
 
         assertTrue(xmp.length > 200_000);
         assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded).xmp());
-        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1000).xmp());
-        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1).xmp());
+        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1000, JxlLimits.defaults()).xmp());
+        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1, JxlLimits.defaults()).xmp());
     }
 
     @Test

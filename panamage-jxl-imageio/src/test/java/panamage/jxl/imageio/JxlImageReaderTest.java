@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import panamage.jxl.JxlEncodeOptions;
 import panamage.jxl.JxlEncoder;
 import panamage.jxl.JxlImage;
+import panamage.jxl.JxlLimitException;
+import panamage.jxl.JxlLimits;
 
 class JxlImageReaderTest {
 
@@ -160,6 +162,46 @@ class JxlImageReaderTest {
     }
 
     @Test
+    void rejectsImagesBeyondThePixelLimit() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("gradient.jxl"));
+        long pixels = (long) Resources.GRADIENT_WIDTH * Resources.GRADIENT_HEIGHT;
+        reader.setLimits(JxlLimits.defaults().withMaxPixels(pixels - 1));
+
+        IIOException e = assertThrows(IIOException.class, () -> reader.read(0));
+        assertInstanceOf(JxlLimitException.class, e.getCause());
+        // The header is not limited, so the size can still be queried.
+        assertEquals(Resources.GRADIENT_WIDTH, reader.getWidth(0));
+        assertEquals(Resources.GRADIENT_HEIGHT, reader.getHeight(0));
+
+        reader.setLimits(JxlLimits.defaults().withMaxPixels(pixels));
+        assertEquals(Resources.GRADIENT_WIDTH, reader.read(0).getWidth());
+    }
+
+    @Test
+    void rejectsMetadataBeyondTheMetadataLimit() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("photo-420-exif.jxl"));
+        reader.setLimits(JxlLimits.defaults().withMaxMetadataBytes(16));
+
+        IIOException e = assertThrows(IIOException.class, () -> reader.getImageMetadata(0));
+        assertInstanceOf(JxlLimitException.class, e.getCause());
+    }
+
+    @Test
+    void keepsTheLimitsForNewInputUntilReset() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("gradient.jxl"));
+        assertEquals(JxlLimits.defaults(), reader.getLimits());
+        JxlLimits limits = JxlLimits.defaults().withMaxPixels(1000);
+        reader.setLimits(limits);
+
+        reader.setInput(stream(Resources.bytes("photo-420-exif.jxl")));
+        assertEquals(limits, reader.getLimits());
+
+        reader.reset();
+        assertEquals(JxlLimits.defaults(), reader.getLimits());
+        assertThrows(NullPointerException.class, () -> reader.setLimits(null));
+    }
+
+    @Test
     void requiresInput() {
         ImageReader reader = new JxlImageReader(new JxlImageReaderSpi());
         assertThrows(IllegalStateException.class, () -> reader.getNumImages(true));
@@ -175,8 +217,8 @@ class JxlImageReaderTest {
         return image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
     }
 
-    private static ImageReader reader(byte[] data) throws IOException {
-        ImageReader reader = new JxlImageReader(new JxlImageReaderSpi());
+    private static JxlImageReader reader(byte[] data) throws IOException {
+        JxlImageReader reader = new JxlImageReader(new JxlImageReaderSpi());
         reader.setInput(stream(data));
         return reader;
     }
