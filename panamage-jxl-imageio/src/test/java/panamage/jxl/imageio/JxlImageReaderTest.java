@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,21 +13,29 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 
 import javax.imageio.IIOException;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.ImageTypeSpecifier;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.ImageOutputStream;
 
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 
 import panamage.jxl.JxlEncodeOptions;
 import panamage.jxl.JxlEncoder;
+import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlLimitException;
 import panamage.jxl.JxlLimits;
@@ -202,6 +211,97 @@ class JxlImageReaderTest {
     }
 
     @Test
+    void countsTheFramesOfAnAnimation() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("animation.jxl"));
+
+        assertEquals(-1, reader.getNumImages(false));
+        assertEquals(3, reader.getNumImages(true));
+        assertEquals(3, reader.getNumImages(false));
+        assertEquals(Resources.ANIMATION_WIDTH, reader.getWidth(2));
+        assertEquals(Resources.ANIMATION_HEIGHT, reader.getHeight(2));
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.read(3));
+        assertThrows(IndexOutOfBoundsException.class, () -> reader.getWidth(-1));
+        assertEquals(1, reader(Resources.bytes("gradient.jxl")).getNumImages(false));
+    }
+
+    @Test
+    void readsTheFramesOfAnAnimationInAnyOrder() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("animation.jxl"));
+        for (int index : new int[] {0, 1, 2, 2, 0, 1, 1, 0}) {
+            BufferedImage image = reader.read(index);
+            assertEquals(BufferedImage.TYPE_4BYTE_ABGR, image.getType());
+            assertArrayEquals(Resources.animationArgb(index), argb(image), "frame " + index);
+        }
+        // ImageIO.read returns the first frame.
+        assertArrayEquals(Resources.animationArgb(0), argb(read(Resources.bytes("animation.jxl"))));
+    }
+
+    @Test
+    void switchesTheSampleTypeBetweenFrames() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("animation.jxl"));
+        assertArrayEquals(Resources.animationArgb(0), argb(reader.read(0)));
+
+        ImageReadParam param = reader.getDefaultReadParam();
+        Iterator<ImageTypeSpecifier> types = reader.getImageTypes(1);
+        types.next();
+        param.setDestinationType(types.next());
+        BufferedImage image = reader.read(1, param);
+        assertEquals(DataBuffer.TYPE_USHORT, image.getRaster().getDataBuffer().getDataType());
+        int[] expected = Resources.animationArgb(1);
+        for (int p = 0; p < expected.length; p++) {
+            int x = p % Resources.ANIMATION_WIDTH;
+            int y = p / Resources.ANIMATION_WIDTH;
+            assertEquals((expected[p] >> 16 & 0xFF) * 257, image.getRaster().getSample(x, y, 0), "pixel " + p);
+            assertEquals((expected[p] >>> 24) * 257, image.getRaster().getSample(x, y, 3), "pixel " + p);
+        }
+
+        assertArrayEquals(Resources.animationArgb(2), argb(reader.read(2)));
+    }
+
+    @Test
+    void describesEachFrameInTheMetadata() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("animation.jxl"));
+
+        JxlImageMetadata metadata = (JxlImageMetadata) reader.getImageMetadata(1);
+
+        assertEquals(new JxlFrameInfo(200, 200.0, ""), metadata.getFrameInfo());
+        Node animation = child(metadata.getAsTree(JxlImageMetadataFormat.NAME), "Animation");
+        NamedNodeMap attributes = animation.getAttributes();
+        assertEquals("1", attributes.getNamedItem("frameIndex").getNodeValue());
+        assertEquals("200.0", attributes.getNamedItem("durationMillis").getNodeValue());
+        assertEquals("200", attributes.getNamedItem("durationTicks").getNodeValue());
+        assertEquals("1000", attributes.getNamedItem("ticksPerSecondNumerator").getNodeValue());
+        assertEquals("1", attributes.getNamedItem("ticksPerSecondDenominator").getNodeValue());
+        assertEquals("0", attributes.getNamedItem("loops").getNodeValue());
+        assertEquals("", attributes.getNamedItem("name").getNodeValue());
+
+        JxlImageMetadata still = (JxlImageMetadata) reader(Resources.bytes("gradient.jxl")).getImageMetadata(0);
+        assertNull(still.getFrameInfo());
+        assertNull(child(still.getAsTree(JxlImageMetadataFormat.NAME), "Animation"));
+    }
+
+    @Test
+    void writesAFrameWithItsMetadataAsAStillImage() throws IOException {
+        IIOImage frame = reader(Resources.bytes("animation.jxl")).readAll(1, null);
+        JxlImageWriteParam param = new JxlImageWriteParam(null);
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionType(JxlImageWriteParam.LOSSLESS);
+
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jxl").next();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ImageOutputStream stream = ImageIO.createImageOutputStream(out)) {
+            writer.setOutput(stream);
+            writer.write(null, frame, param);
+        } finally {
+            writer.dispose();
+        }
+
+        JxlImageReader copy = reader(out.toByteArray());
+        assertEquals(1, copy.getNumImages(true));
+        assertArrayEquals(Resources.animationArgb(1), argb(copy.read(0)));
+    }
+
+    @Test
     void requiresInput() {
         ImageReader reader = new JxlImageReader(new JxlImageReaderSpi());
         assertThrows(IllegalStateException.class, () -> reader.getNumImages(true));
@@ -215,6 +315,15 @@ class JxlImageReaderTest {
 
     static int[] argb(BufferedImage image) {
         return image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
+    }
+
+    private static Node child(Node parent, String name) {
+        for (Node child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (name.equals(child.getNodeName())) {
+                return child;
+            }
+        }
+        return null;
     }
 
     private static JxlImageReader reader(byte[] data) throws IOException {

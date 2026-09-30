@@ -115,7 +115,7 @@ public final class JxlTranscoder {
         }
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = arena.allocateFrom(JAVA_BYTE, jxl);
-            JxlDecoder.checkFrames(input, limits, arena);
+            JxlDecoder.checkFrames(input, limits, 1, false, arena);
             return reconstruct(input, chunkSize, arena);
         }
     }

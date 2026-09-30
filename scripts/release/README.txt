@@ -66,6 +66,11 @@ Put the four JARs on the class path or module path, then:
 JxlDecoder.decode(data, channels, JxlSampleType.UINT16 or FLOAT32) as
 JxlImage.Uint16 or JxlImage.Float32, and encoded with the same precision.
 
+Of an animation, JxlDecoder.decode returns the first frame;
+JxlDecoder.decodeFrames returns all frames with their durations, and
+JxlFrameDecoder decodes one frame at a time. In Image I/O, every frame is an
+image: getNumImages(true) counts the frames and read(i) returns frame i.
+
 EXIF and XMP metadata are kept by JxlTranscoder and when an image is copied
 with ImageReader.readAll and ImageWriter.write (IIOImage with metadata); the
 convenience methods ImageIO.read and ImageIO.write do not carry metadata. See

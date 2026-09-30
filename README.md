@@ -18,6 +18,8 @@ bundled; nothing needs to be installed.
 - **Decode** JPEG XL (codestream and container) to gray, gray+alpha, RGB or
   RGBA with 8-bit, 16-bit or floating point samples, upright according to the
   image orientation.
+- **Animations:** all frames with their duration, name and loop count, at once
+  or one frame at a time; in Image I/O, every frame is an image.
 - **Encode** 8-bit, 16-bit and floating point images lossless or lossy, with a
   quality (0 to 100) or Butteraugli distance and an effort from 1 to 10.
   Lossless encoding reproduces every sample exactly, including HDR values.
@@ -53,7 +55,8 @@ bundled; nothing needs to be installed.
 
 Download `panamage-0.0.2-windows-x86_64.zip`,
 `panamage-0.0.2-linux-x86_64.tar.gz` or `panamage-0.0.2-macos-aarch64.tar.gz`
-from the [Releases](../../releases) page and unpack it. It contains the JARs, a README and a small example program:
+from the [Releases](../../releases) page and unpack it. It contains the JARs,
+a README and a small example program:
 
 ```sh
 # class path
@@ -108,6 +111,11 @@ try (ImageOutputStream out = ImageIO.createImageOutputStream(new File("photo.jxl
 `write(IIOMetadata, IIOImage, ImageWriteParam)` as above, or
 `JxlImageMetadata` to set EXIF and XMP yourself.
 
+An animation has one image per frame: `getNumImages(true)` returns the number
+of frames, `read(i)` returns frame `i` as it is displayed, and
+`JxlImageMetadata.getFrameInfo()` of `getImageMetadata(i)` gives its duration
+and name. `ImageIO.read` returns the first frame.
+
 ### Lossless JPEG transcoding
 
 ```java
@@ -136,6 +144,22 @@ byte[] lossy = JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90).withEffor
 `JxlDecoder.decode(data)` and `decode(data, channels)` return 8-bit samples
 (`JxlImage.Uint8`).
 
+### Animations
+
+`decode` returns the first frame of an animation. All frames, as they are
+displayed and each as large as the image:
+
+```java
+JxlAnimationInfo animation = JxlDecoder.readAnimationInfo(data);  // frames, durations, loops; no pixels
+List<JxlFrame> frames = JxlDecoder.decodeFrames(data, 4, JxlSampleType.UINT8);
+
+try (JxlFrameDecoder decoder = JxlFrameDecoder.open(data, 4, JxlSampleType.UINT8)) {
+    for (JxlFrame frame = decoder.next(); frame != null; frame = decoder.next()) {
+        show(frame.image(), frame.info().durationMillis());      // one frame in memory at a time
+    }
+}
+```
+
 ### Limits for untrusted input
 
 A JPEG XL file of a few hundred bytes can declare an image of a billion
@@ -144,9 +168,11 @@ bound, so panamage checks the size first and throws a `JxlLimitException`
 (a `JxlException`; an `IIOException` caused by it in Image I/O):
 
 - **Pixels:** by default at most 2^28 (256 megapixels, for example
-  16384 x 16384), for the image and for every layer of the first frame (a layer
-  may be larger than the image). Images with more than 4 channels, including
-  extra channels, count once for every 4 channels started.
+  16384 x 16384), for the image and for every layer of the decoded frames (a
+  layer may be larger than the image). Images with more than 4 channels,
+  including extra channels, count once for every 4 channels started.
+  `decodeFrames` holds all frames of an animation at once, so there the limit
+  applies to all frames together; `JxlFrameDecoder` applies it to each frame.
 - **Metadata:** by default at most 16 MiB for each EXIF or XMP box after
   decompression.
 
@@ -254,7 +280,7 @@ Three GitHub Actions workflows, all started manually (Actions, Run workflow):
 
 - Integer samples with more than 16 bits are decoded as floating point; 16-bit
   floating point (half precision) is not supported as a sample type.
-- Only the first frame of an animation is decoded.
+- Animations cannot be written yet; the writers write single images.
 - Whole images are held in memory; there is no streaming or progressive API yet.
 - The Image I/O writer converts images without a component color model (for
   example `TYPE_INT_RGB` or indexed images) to 8-bit sRGB.

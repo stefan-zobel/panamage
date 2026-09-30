@@ -23,6 +23,12 @@ For the tests with more than 8 bits per sample:
     gradient-float.rgbf32 holds the samples as raw little-endian float32
     values, top row first
 
+For the animation tests, animation.jxl holds 3 frames of 16x12 pixels (8-bit
+RGBA) with durations of 100, 200 and 300 ms, looping forever. It is converted
+losslessly with cjxl from an APNG file written with the standard library;
+animation.rgba holds the expected frames as raw RGBA bytes, one after the
+other.
+
 Usage:
   python make_test_images.py [--tools DIR]
 """
@@ -45,6 +51,13 @@ LIBJXL_DIR = "libjxl-0.12.0"
 WIDTH = 64
 HEIGHT = 48
 
+ANIMATION_WIDTH = 16
+ANIMATION_HEIGHT = 12
+# Delay of each frame in milliseconds.
+ANIMATION_DELAYS = [100, 200, 300]
+# 0 plays the animation forever; cjxl does not take over other values.
+ANIMATION_PLAYS = 0
+
 PHOTO_WIDTH = 256
 PHOTO_HEIGHT = 192
 PHOTO_SEED = 20260930
@@ -66,6 +79,12 @@ def pixel16(x: int, y: int) -> tuple[int, int, int, int]:
 def pixel_float(x: int, y: int) -> tuple[float, float, float]:
     """Float RGB value at (x, y), including values above 1.0 and below 0.0."""
     return x / (WIDTH - 1) * 1.5, y / (HEIGHT - 1), (x + y) / (WIDTH + HEIGHT - 2) * 0.8 - 0.1
+
+
+def animation_pixel(frame: int, x: int, y: int) -> tuple[int, int, int, int]:
+    """RGBA value at (x, y) of an animation frame; every channel differs between frames."""
+    return ((x * 16 + frame * 80) & 0xFF, (y * 20 + frame * 40) & 0xFF,
+            (x * y * 3 + frame * 100) & 0xFF, 255 - frame * 60 - x * 2)
 
 
 def png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -116,6 +135,37 @@ def write_float_images(cjxl: Path) -> None:
         pfm.write_bytes(f"PF\n{WIDTH} {HEIGHT}\n-1.0\n".encode("ascii")
                         + b"".join(struct.pack("<3f", *p) for row in reversed(samples) for p in row))
         convert_lossless(cjxl, pfm, RESOURCES_DIR / "gradient-float.jxl")
+
+
+def write_animation(cjxl: Path) -> None:
+    """Writes animation.rgba and converts an APNG with the same frames to animation.jxl."""
+    frames = [[b"".join(bytes(animation_pixel(f, x, y)) for x in range(ANIMATION_WIDTH))
+               for y in range(ANIMATION_HEIGHT)] for f in range(len(ANIMATION_DELAYS))]
+    raw = RESOURCES_DIR / "animation.rgba"
+    raw.write_bytes(b"".join(row for rows in frames for row in rows))
+    print(f"Wrote {raw}")
+
+    header = struct.pack(">IIBBBBB", ANIMATION_WIDTH, ANIMATION_HEIGHT, 8, 6, 0, 0, 0)  # RGBA
+    chunks = [png_chunk(b"IHDR", header),
+              png_chunk(b"acTL", struct.pack(">II", len(frames), ANIMATION_PLAYS))]
+    sequence = 0
+    for index, (rows, delay) in enumerate(zip(frames, ANIMATION_DELAYS)):
+        # Full-size frames at (0, 0), delay in milliseconds, no disposal, no blending.
+        control = struct.pack(">IIIIIHHBB", sequence, ANIMATION_WIDTH, ANIMATION_HEIGHT, 0, 0,
+                              delay, 1000, 0, 0)
+        chunks.append(png_chunk(b"fcTL", control))
+        sequence += 1
+        compressed = zlib.compress(b"".join(b"\x00" + row for row in rows), 9)
+        if index == 0:
+            chunks.append(png_chunk(b"IDAT", compressed))
+        else:
+            chunks.append(png_chunk(b"fdAT", struct.pack(">I", sequence) + compressed))
+            sequence += 1
+    chunks.append(png_chunk(b"IEND", b""))
+    with tempfile.TemporaryDirectory() as temp:
+        apng = Path(temp) / "animation.png"
+        apng.write_bytes(b"\x89PNG\r\n\x1a\n" + b"".join(chunks))
+        convert_lossless(cjxl, apng, RESOURCES_DIR / "animation.jxl")
 
 
 def convert_lossless(cjxl: Path, source: Path, jxl: Path) -> None:
@@ -230,6 +280,7 @@ def main() -> int:
     write_jpegs(cjxl)
     write_16bit_images(cjxl)
     write_float_images(cjxl)
+    write_animation(cjxl)
     return 0
 
 

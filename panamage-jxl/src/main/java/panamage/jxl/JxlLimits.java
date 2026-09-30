@@ -11,11 +11,14 @@ package panamage.jxl;
  * {@link JxlTranscoder} therefore reject images beyond these limits before
  * the pixels are allocated, with a {@link JxlLimitException}.
  * <p>
- * The pixel limit applies to the image and to every layer of the first frame
- * (layers may be larger than the image). An image with more than 4 channels
- * counts once for every 4 channels started, including extra channels, so a
- * gray, RGB or RGBA image of 16384 x 16384 pixels just fits the default
- * limit. The metadata limit applies to each EXIF or XMP box after
+ * The pixel limit applies to the image and to every layer of the decoded
+ * frames (layers may be larger than the image). An image with more than 4
+ * channels counts once for every 4 channels started, including extra
+ * channels, so a gray, RGB or RGBA image of 16384 x 16384 pixels just fits the
+ * default limit. {@link JxlDecoder#decodeFrames} returns all frames of an
+ * animation at once, so there the limit applies to all frames together;
+ * {@link JxlFrameDecoder} holds one frame at a time and applies it to each
+ * frame. The metadata limit applies to each EXIF or XMP box after
  * decompression.
  * <p>
  * The methods without a {@code JxlLimits} parameter use {@link #defaults()},
@@ -122,13 +125,44 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
         if (width <= 0 || height <= 0) {
             return;
         }
-        long units = Math.max(1, (channels + CHANNELS_PER_PIXEL - 1) / CHANNELS_PER_PIXEL);
+        long units = units(channels);
         // The first test also guarantees that width * height does not overflow.
         if (height > maxPixels / width || width * height > maxPixels / units) {
-            String size = width + " x " + height + " pixels"
-                    + (units > 1 ? " with " + channels + " channels" : "");
-            throw new JxlLimitException(what + " of " + size + " exceeds the limit of " + maxPixels + " pixels");
+            throw exceeded(what + " of " + size(width, height, channels));
         }
+    }
+
+    /**
+     * Throws a {@link JxlLimitException} if the given number of frames of the
+     * given size together exceed the pixel limit.
+     *
+     * @param frames   the number of frames
+     * @param width    the width of a frame in pixels
+     * @param height   the height of a frame in pixels
+     * @param channels the number of color and extra channels
+     */
+    void checkAnimation(long frames, long width, long height, int channels) {
+        if (frames <= 0 || width <= 0 || height <= 0) {
+            return;
+        }
+        long pixels = maxPixels / units(channels);
+        // Each test guarantees that the product in the next one does not overflow.
+        if (height > maxPixels / width || width * height > pixels || frames > pixels / (width * height)) {
+            throw exceeded("Animation of " + frames + " frames of " + size(width, height, channels));
+        }
+    }
+
+    /** The number of times an area counts, once for every 4 channels started. */
+    private static long units(int channels) {
+        return Math.max(1, (channels + CHANNELS_PER_PIXEL - 1) / CHANNELS_PER_PIXEL);
+    }
+
+    private static String size(long width, long height, int channels) {
+        return width + " x " + height + " pixels" + (units(channels) > 1 ? " with " + channels + " channels" : "");
+    }
+
+    private JxlLimitException exceeded(String what) {
+        return new JxlLimitException(what + " exceeds the limit of " + maxPixels + " pixels");
     }
 
     /**

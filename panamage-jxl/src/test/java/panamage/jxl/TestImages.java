@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 
 /**
  * Access to the test images in {@code src/test/resources}, created by
@@ -25,6 +26,12 @@ final class TestImages {
 
     /** {@code photo-420-exif.jpg} transcoded with cjxl. */
     static final String PHOTO_CJXL_REFERENCE = "photo-420-exif.jxl";
+
+    static final int ANIMATION_WIDTH = 16;
+    static final int ANIMATION_HEIGHT = 12;
+
+    /** The frame durations of {@code animation.jxl} in milliseconds. */
+    static final double[] ANIMATION_DURATIONS = {100, 200, 300};
 
     private TestImages() {
     }
@@ -85,6 +92,17 @@ final class TestImages {
         float[] samples = new float[raw.length / 4];
         ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(samples);
         return samples;
+    }
+
+    /** The lossless 8-bit RGBA animation created with cjxl from an APNG file. */
+    static byte[] animationJxl() {
+        return resource("animation.jxl");
+    }
+
+    /** The reference pixels of a frame of {@code animation.jxl}, interleaved RGBA. */
+    static byte[] animationRgbaPixels(int frame) {
+        int size = ANIMATION_WIDTH * ANIMATION_HEIGHT * 4;
+        return Arrays.copyOfRange(resource("animation.rgba"), frame * size, (frame + 1) * size);
     }
 
     static byte[] resource(String name) {

@@ -7,12 +7,15 @@ import javax.imageio.metadata.IIOMetadataNode;
 
 import org.w3c.dom.Node;
 
+import panamage.jxl.JxlAnimationInfo;
+import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImageInfo;
 import panamage.jxl.JxlMetadata;
 
 /**
  * Image metadata of a JPEG XL image: EXIF, XMP and, for images that are not
- * sRGB, the ICC profile.
+ * sRGB, the ICC profile. For a frame of an animation, it also holds the
+ * duration and name of the frame and the loop count.
  * <p>
  * Supports the native format {@value JxlImageMetadataFormat#NAME} and, for
  * reading, the standard format {@code javax_imageio_1.0}. Metadata returned
@@ -25,6 +28,8 @@ public final class JxlImageMetadata extends IIOMetadata {
 
     private final boolean readOnly;
     private final JxlImageInfo info;
+    private final JxlAnimationInfo animation;
+    private final int frameIndex;
     private byte[] exif;
     private byte[] xmp;
 
@@ -36,9 +41,23 @@ public final class JxlImageMetadata extends IIOMetadata {
     }
 
     JxlImageMetadata(JxlImageInfo info, JxlMetadata metadata, boolean readOnly) {
+        this(info, metadata, readOnly, null, 0);
+    }
+
+    /**
+     * Creates metadata for a frame of an animation.
+     *
+     * @param animation  the frames of the animation, or {@code null} for a
+     *                   still image
+     * @param frameIndex the index of the frame in {@code animation}
+     */
+    JxlImageMetadata(JxlImageInfo info, JxlMetadata metadata, boolean readOnly, JxlAnimationInfo animation,
+            int frameIndex) {
         super(true, JxlImageMetadataFormat.NAME, JxlImageMetadataFormat.class.getName(), null, null);
         this.info = info;
         this.readOnly = readOnly;
+        this.animation = animation;
+        this.frameIndex = frameIndex;
         this.exif = metadata.exif();
         this.xmp = metadata.xmp();
     }
@@ -94,6 +113,17 @@ public final class JxlImageMetadata extends IIOMetadata {
     }
 
     /**
+     * Returns the duration and name of the frame, if the metadata belongs to a
+     * frame of an animation read by {@link JxlImageReader}.
+     *
+     * @return the frame information, or {@code null} for a still image or
+     *         metadata for writing
+     */
+    public JxlFrameInfo getFrameInfo() {
+        return animation == null ? null : animation.frames().get(frameIndex);
+    }
+
+    /**
      * Returns the EXIF and XMP data for {@link panamage.jxl.JxlEncoder}.
      *
      * @return the metadata
@@ -134,8 +164,8 @@ public final class JxlImageMetadata extends IIOMetadata {
             switch (child.getNodeName()) {
                 case JxlImageMetadataFormat.EXIF -> exif = bytes(child);
                 case JxlImageMetadataFormat.XMP -> xmp = bytes(child);
-                case JxlImageMetadataFormat.ICC_PROFILE -> {
-                    // Derived from the pixels when reading; not written.
+                case JxlImageMetadataFormat.ICC_PROFILE, JxlImageMetadataFormat.ANIMATION -> {
+                    // Derived from the image when reading; not written.
                 }
                 default -> throw new IIOInvalidTreeException("Unknown element " + child.getNodeName(), child);
             }
@@ -154,6 +184,20 @@ public final class JxlImageMetadata extends IIOMetadata {
         addBytes(root, JxlImageMetadataFormat.EXIF, getExif());
         addBytes(root, JxlImageMetadataFormat.XMP, getXmp());
         addBytes(root, JxlImageMetadataFormat.ICC_PROFILE, getIccProfile());
+        JxlFrameInfo frame = getFrameInfo();
+        if (frame != null) {
+            IIOMetadataNode node = new IIOMetadataNode(JxlImageMetadataFormat.ANIMATION);
+            node.setAttribute(JxlImageMetadataFormat.FRAME_INDEX, Integer.toString(frameIndex));
+            node.setAttribute(JxlImageMetadataFormat.DURATION_MILLIS, Double.toString(frame.durationMillis()));
+            node.setAttribute(JxlImageMetadataFormat.DURATION_TICKS, Long.toString(frame.durationTicks()));
+            node.setAttribute(JxlImageMetadataFormat.TICKS_PER_SECOND_NUMERATOR,
+                    Long.toString(animation.ticksPerSecondNumerator()));
+            node.setAttribute(JxlImageMetadataFormat.TICKS_PER_SECOND_DENOMINATOR,
+                    Long.toString(animation.ticksPerSecondDenominator()));
+            node.setAttribute(JxlImageMetadataFormat.LOOPS, Long.toString(animation.loops()));
+            node.setAttribute(JxlImageMetadataFormat.FRAME_NAME, frame.name());
+            root.appendChild(node);
+        }
         return root;
     }
 

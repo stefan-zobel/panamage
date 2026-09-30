@@ -87,6 +87,28 @@ class JxlLimitsTest {
         assertDoesNotThrow(() -> JxlLimits.unlimited().checkPixels("Image", largest, largest, 4));
     }
 
+    @Test
+    void countsAllFramesOfAnAnimationTogether() {
+        JxlLimits limits = JxlLimits.defaults().withMaxPixels(1000);
+        assertDoesNotThrow(() -> limits.checkAnimation(10, 10, 10, 4));
+        JxlLimitException e = assertThrows(JxlLimitException.class, () -> limits.checkAnimation(11, 10, 10, 4));
+        assertEquals("Animation of 11 frames of 10 x 10 pixels exceeds the limit of 1000 pixels", e.getMessage());
+        e = assertThrows(JxlLimitException.class, () -> limits.checkAnimation(6, 10, 10, 5));
+        assertEquals("Animation of 6 frames of 10 x 10 pixels with 5 channels exceeds the limit of 1000 pixels",
+                e.getMessage());
+        assertDoesNotThrow(() -> limits.checkAnimation(5, 10, 10, 5));
+        assertDoesNotThrow(() -> limits.checkAnimation(0, 10, 10, 4));
+    }
+
+    @Test
+    void treatsOverflowOfAllFramesAsExceedingTheLimit() {
+        JxlLimits limits = JxlLimits.defaults().withMaxPixels(Long.MAX_VALUE - 1);
+        long huge = 0xFFFF_FFFFL;
+        assertThrows(JxlLimitException.class, () -> limits.checkAnimation(huge, huge, huge, 4));
+        assertThrows(JxlLimitException.class, () -> limits.checkAnimation(Long.MAX_VALUE, 2, 2, 4));
+        assertDoesNotThrow(() -> JxlLimits.unlimited().checkAnimation(1000, 1L << 20, 1L << 20, 4));
+    }
+
     private static void withProperties(String maxPixels, String maxMetadataBytes, Runnable action) {
         String oldPixels = System.getProperty(JxlLimits.MAX_PIXELS_PROPERTY);
         String oldMetadata = System.getProperty(JxlLimits.MAX_METADATA_BYTES_PROPERTY);

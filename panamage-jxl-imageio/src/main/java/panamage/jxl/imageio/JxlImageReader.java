@@ -17,11 +17,15 @@ import javax.imageio.ImageTypeSpecifier;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.stream.ImageInputStream;
 
+import panamage.jxl.JxlAnimationInfo;
 import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlException;
+import panamage.jxl.JxlFrame;
+import panamage.jxl.JxlFrameDecoder;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlImageInfo;
 import panamage.jxl.JxlLimits;
+import panamage.jxl.JxlMetadata;
 import panamage.jxl.JxlSampleType;
 
 /**
@@ -34,8 +38,14 @@ import panamage.jxl.JxlSampleType;
  * {@code TYPE_3BYTE_BGR} or {@code TYPE_4BYTE_ABGR}, 16-bit sRGB gray images
  * {@code TYPE_USHORT_GRAY}; all others use a component color model with
  * interleaved samples. Images in another color space than sRGB (typically
- * lossless wide-gamut images) keep their ICC profile in the color model. Of an
- * animation, only the first frame is read.
+ * lossless wide-gamut images) keep their ICC profile in the color model.
+ * <p>
+ * Each frame of an animation is an image: {@link #getNumImages(boolean)}
+ * returns the number of frames (or -1 without {@code allowSearch}, until the
+ * frames have been counted), and {@code read(i)} returns frame {@code i} as it
+ * is displayed, with the size of the whole image. Reading the frames in order
+ * decodes each frame once; the image metadata of a frame holds its duration
+ * and name ({@link JxlImageMetadata#getFrameInfo()}).
  * <p>
  * Floating point samples are not clipped: HDR values above 1.0 and small
  * negative values from lossy encoding are kept. Java 2D does not clip them
@@ -66,7 +76,13 @@ public final class JxlImageReader extends ImageReader {
     private JxlLimits limits = JxlLimits.defaults();
     private byte[] data;
     private JxlImageInfo info;
-    private JxlImageMetadata metadata;
+    private JxlAnimationInfo animation;
+    private JxlMetadata boxes;
+
+    /** Decodes the frames of an animation in order; reopened to go back. */
+    private JxlFrameDecoder frames;
+    private JxlSampleType framesType;
+    private JxlLimits framesLimits;
 
     /**
      * Creates a reader; usually called through {@link JxlImageReaderSpi}.
@@ -99,15 +115,21 @@ public final class JxlImageReader extends ImageReader {
     @Override
     public void setInput(Object input, boolean seekForwardOnly, boolean ignoreMetadata) {
         super.setInput(input, seekForwardOnly, ignoreMetadata);
-        data = null;
-        info = null;
-        metadata = null;
+        clear();
     }
 
+    /**
+     * Returns 1 for a still image and the number of frames for an animation.
+     * Counting the frames reads their headers; without {@code allowSearch},
+     * -1 is returned for an animation until the frames have been counted.
+     */
     @Override
     public int getNumImages(boolean allowSearch) throws IOException {
         requireInput();
-        return 1;
+        if (!info().animated()) {
+            return 1;
+        }
+        return animation == null && !allowSearch ? -1 : animation().frameCount();
     }
 
     @Override
@@ -165,21 +187,24 @@ public final class JxlImageReader extends ImageReader {
     }
 
     /**
-     * Returns the EXIF and XMP metadata and, for images that are not sRGB,
-     * the ICC profile, as read-only {@link JxlImageMetadata}.
+     * Returns the EXIF and XMP metadata, for images that are not sRGB the ICC
+     * profile and for animations the duration and name of the frame, as
+     * read-only {@link JxlImageMetadata}.
      */
     @Override
     public IIOMetadata getImageMetadata(int imageIndex) throws IOException {
         checkIndex(imageIndex);
-        if (metadata == null) {
-            JxlImageInfo imageInfo = info();
+        JxlImageInfo imageInfo = info();
+        if (boxes == null) {
             try {
-                metadata = new JxlImageMetadata(imageInfo, JxlDecoder.readMetadata(data(), limits), true);
+                boxes = JxlDecoder.readMetadata(data(), limits);
             } catch (JxlException e) {
                 throw new IIOException("Cannot read JPEG XL metadata: " + e.getMessage(), e);
             }
         }
-        return metadata;
+        return imageInfo.animated()
+                ? new JxlImageMetadata(imageInfo, boxes, true, animation(), imageIndex)
+                : new JxlImageMetadata(imageInfo, boxes, true);
     }
 
     @Override
@@ -196,8 +221,10 @@ public final class JxlImageReader extends ImageReader {
 
         JxlImage decoded;
         try {
-            decoded = JxlDecoder.decode(data(), imageInfo.channels(), type, limits);
+            decoded = imageInfo.animated() ? readFrame(imageIndex, imageInfo.channels(), type)
+                    : JxlDecoder.decode(data(), imageInfo.channels(), type, limits);
         } catch (JxlException e) {
+            closeFrames();
             throw new IIOException("Cannot decode JPEG XL image: " + e.getMessage(), e);
         }
         processImageProgress(90.0f);
@@ -214,31 +241,66 @@ public final class JxlImageReader extends ImageReader {
         return image;
     }
 
+    /**
+     * Decodes a frame of an animation, continuing with the open frame decoder
+     * if the frame comes after the last one read.
+     */
+    private JxlImage readFrame(int index, int channels, JxlSampleType type) throws IOException {
+        if (frames == null || framesType != type || !framesLimits.equals(limits) || frames.nextIndex() > index) {
+            closeFrames();
+            frames = JxlFrameDecoder.open(data(), channels, type, limits);
+            framesType = type;
+            framesLimits = limits;
+        }
+        frames.skip(index - frames.nextIndex());
+        JxlFrame frame = frames.next();
+        if (frame == null) {
+            throw new IIOException("The JPEG XL animation has no frame " + index);
+        }
+        return frame.image();
+    }
+
     /** Also restores the default limits. */
     @Override
     public void reset() {
         super.reset();
         limits = JxlLimits.defaults();
-        data = null;
-        info = null;
-        metadata = null;
+        clear();
     }
 
     @Override
     public void dispose() {
+        clear();
+    }
+
+    private void clear() {
+        closeFrames();
         data = null;
         info = null;
-        metadata = null;
+        animation = null;
+        boxes = null;
+    }
+
+    private void closeFrames() {
+        if (frames != null) {
+            frames.close();
+            frames = null;
+        }
     }
 
     private ColorSpace iccColorSpace(byte[] iccProfile, int channels) {
         return BufferedImages.iccColorSpace(iccProfile, channels, this::processWarningOccurred);
     }
 
-    private void checkIndex(int imageIndex) {
+    private void checkIndex(int imageIndex) throws IOException {
         requireInput();
-        if (imageIndex != 0) {
-            throw new IndexOutOfBoundsException("A JPEG XL file contains one image: " + imageIndex);
+        if (imageIndex == 0) {
+            return;
+        }
+        int count = imageIndex > 0 && info().animated() ? animation().frameCount() : 1;
+        if (imageIndex < 0 || imageIndex >= count) {
+            throw new IndexOutOfBoundsException("Image index " + imageIndex + " is out of range; the JPEG XL file"
+                    + (count == 1 ? " has one image" : " has " + count + " frames"));
         }
     }
 
@@ -258,6 +320,17 @@ public final class JxlImageReader extends ImageReader {
             }
         }
         return info;
+    }
+
+    private JxlAnimationInfo animation() throws IOException {
+        if (animation == null) {
+            try {
+                animation = JxlDecoder.readAnimationInfo(data());
+            } catch (JxlException e) {
+                throw new IIOException("Cannot read JPEG XL frames: " + e.getMessage(), e);
+            }
+        }
+        return animation;
     }
 
     /** Reads the input from its current position to the end, once. */

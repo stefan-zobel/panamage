@@ -32,8 +32,10 @@ import panamage.jxl.ffi.JxlBasicInfo;
  * Each test case is checked like the corpus' own {@code conformance.py}: the
  * first frame is decoded to floating point samples and compared with the
  * reference in the same color space; the peak error and the largest RMSE of
- * a channel must not exceed the limits of the test case. Where the corpus has
- * a reconstructed JPEG file, {@link JxlTranscoder#toJpeg} must reproduce it.
+ * a channel must not exceed the limits of the test case. Every frame of an
+ * animation is compared in the same way, and its duration and name must
+ * match. Where the corpus has a reconstructed JPEG file,
+ * {@link JxlTranscoder#toJpeg} must reproduce it.
  */
 class ConformanceTest {
 
@@ -110,10 +112,29 @@ class ConformanceTest {
             samples = premultiplied(samples, image.channels());
         }
 
-        Map<?, ?> frame = (Map<?, ?>) frames.get(0);
-        double rmsLimit = ((Number) frame.get("rms_error")).doubleValue();
-        double peakLimit = ((Number) frame.get("peak_error")).doubleValue();
-        compare(name, reference, image, samples, referenceChannel, rmsLimit, peakLimit);
+        compare(name, reference, 0, image, samples, referenceChannel, (Map<?, ?>) frames.get(0));
+
+        if (frames.size() > 1) {
+            List<JxlFrameInfo> frameInfos = JxlDecoder.readAnimationInfo(input).frames();
+            List<JxlFrame> decoded = JxlDecoder.decodeFrames(input, info.channels(), JxlSampleType.FLOAT32);
+            assertEquals(frames.size(), frameInfos.size(), name + ": frames");
+            assertEquals(frames.size(), decoded.size(), name + ": decoded frames");
+            for (int i = 0; i < frames.size(); i++) {
+                Map<?, ?> expected = (Map<?, ?>) frames.get(i);
+                String frameName = name + " frame " + i;
+                double seconds = ((Number) expected.get("duration")).doubleValue();
+                assertEquals(seconds * 1000, frameInfos.get(i).durationMillis(), 1e-6, frameName + ": duration");
+                assertEquals(expected.get("name"), frameInfos.get(i).name(), frameName + ": name");
+                assertEquals(frameInfos.get(i), decoded.get(i).info(), frameName + ": frame info");
+
+                JxlImage.Float32 frameImage = (JxlImage.Float32) decoded.get(i).image();
+                float[] frameSamples = frameImage.pixels();
+                if (info.hasAlpha() && storesPremultipliedAlpha(input)) {
+                    frameSamples = premultiplied(frameSamples, frameImage.channels());
+                }
+                compare(frameName, reference, i, frameImage, frameSamples, referenceChannel, expected);
+            }
+        }
 
         Path jpeg = testCase.resolve("reconstructed.jpg");
         if (Files.exists(jpeg)) {
@@ -121,13 +142,17 @@ class ConformanceTest {
         }
     }
 
-    /** Checks the first frame like conformance.py: peak error and the largest RMSE of a channel. */
-    private static void compare(String name, Npy reference, JxlImage.Float32 image, float[] actual,
-            int[] referenceChannel, double rmsLimit, double peakLimit) {
+    /** Checks a frame like conformance.py: peak error and the largest RMSE of a channel. */
+    private static void compare(String name, Npy reference, int frame, JxlImage.Float32 image, float[] actual,
+            int[] referenceChannel, Map<?, ?> limits) {
+        double rmsLimit = ((Number) limits.get("rms_error")).doubleValue();
+        double peakLimit = ((Number) limits.get("peak_error")).doubleValue();
         int referenceChannels = reference.shape()[3];
         int channels = image.channels();
         int pixels = image.width() * image.height();
-        float[] expected = reference.data();
+        float[] data = reference.data();
+        float[] expected = Arrays.copyOfRange(data, frame * pixels * referenceChannels,
+                (frame + 1) * pixels * referenceChannels);
         double[] squaredErrors = new double[channels];
         double peak = 0;
         int peakChannel = 0;

@@ -11,6 +11,12 @@ import javax.imageio.metadata.IIOMetadataFormatImpl;
  * a {@code byte[]} as user object: {@code Exif} (TIFF data), {@code XMP} (XML
  * bytes) and {@code ICCProfile} (read only; present if the decoded pixels are
  * not sRGB).
+ * <p>
+ * For a frame of an animation, the root also has an {@code Animation} element
+ * (read only) with the attributes {@code frameIndex}, {@code durationMillis},
+ * {@code durationTicks}, {@code ticksPerSecondNumerator},
+ * {@code ticksPerSecondDenominator}, {@code loops} (0 plays the animation
+ * forever) and {@code name} (empty if the frame has no name).
  */
 public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
 
@@ -20,6 +26,15 @@ public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
     static final String EXIF = "Exif";
     static final String XMP = "XMP";
     static final String ICC_PROFILE = "ICCProfile";
+    static final String ANIMATION = "Animation";
+
+    static final String FRAME_INDEX = "frameIndex";
+    static final String DURATION_MILLIS = "durationMillis";
+    static final String DURATION_TICKS = "durationTicks";
+    static final String TICKS_PER_SECOND_NUMERATOR = "ticksPerSecondNumerator";
+    static final String TICKS_PER_SECOND_DENOMINATOR = "ticksPerSecondDenominator";
+    static final String LOOPS = "loops";
+    static final String FRAME_NAME = "name";
 
     private static final JxlImageMetadataFormat INSTANCE = new JxlImageMetadataFormat();
 
@@ -29,6 +44,14 @@ public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
             addElement(element, NAME, CHILD_POLICY_EMPTY);
             addObjectValue(element, byte.class, 0, Integer.MAX_VALUE);
         }
+        addElement(ANIMATION, NAME, CHILD_POLICY_EMPTY);
+        addAttribute(ANIMATION, FRAME_INDEX, DATATYPE_INTEGER, true, null);
+        addAttribute(ANIMATION, DURATION_MILLIS, DATATYPE_DOUBLE, true, null);
+        for (String attribute : new String[] {DURATION_TICKS, TICKS_PER_SECOND_NUMERATOR,
+                TICKS_PER_SECOND_DENOMINATOR, LOOPS}) {
+            addAttribute(ANIMATION, attribute, DATATYPE_INTEGER, true, null);
+        }
+        addAttribute(ANIMATION, FRAME_NAME, DATATYPE_STRING, true, "");
     }
 
     /**
