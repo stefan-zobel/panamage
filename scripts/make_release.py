@@ -2,10 +2,11 @@
 
 Builds the project with all tests (optionally also on Linux in WSL) and writes
 to dist/<version>/:
-  * the five JARs
-  * panamage-<version>-windows-x86_64.zip and panamage-<version>-linux-x86_64.tar.gz,
-    each with the JARs for the platform, README.txt, Example.java, LICENSE and
-    the licenses of the bundled native libraries
+  * the six JARs
+  * panamage-<version>-windows-x86_64.zip, panamage-<version>-linux-x86_64.tar.gz
+    and panamage-<version>-macos-aarch64.tar.gz, each with the JARs for the
+    platform, README.txt, Example.java, LICENSE and the licenses of the bundled
+    native libraries
   * SHA256SUMS for all files, in the format of sha256sum
 
 The version is taken from the root POM and must not be a snapshot.
@@ -46,6 +47,10 @@ PLATFORMS = {
         "requirements": "Linux on x86_64 with glibc 2.29 or newer (for example Ubuntu 20.04,\n"
                         "  Debian 11, RHEL 9 or newer); musl-based systems such as Alpine are\n"
                         "  not supported",
+    },
+    "macos-aarch64": {
+        "archive": "tar.gz",
+        "requirements": "macOS 11 or newer on Apple silicon (arm64)",
     },
 }
 

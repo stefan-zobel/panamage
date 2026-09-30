@@ -1,0 +1,104 @@
+# Builds panamage and runs all tests on the platforms whose native libraries it
+# bundles, on real hardware. Started manually; the platforms can be chosen.
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Platforms to build and test on
+        type: choice
+        options:
+          - all
+          - linux
+          - macos
+          - windows
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  # A job-level condition cannot use the matrix, so the matrix is computed here.
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - id: select
+        shell: python
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          import json, os
+          runners = {"linux": "ubuntu-24.04", "macos": "macos-15", "windows": "windows-2025"}
+          chosen = os.environ["PLATFORMS"]
+          include = [{"name": name, "os": os_} for name, os_ in runners.items() if chosen in ("all", name)]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write("matrix=" + json.dumps({"include": include}) + "\n")
+
+  build:
+    needs: select
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # fetch_tools.py needs 7-Zip for the Deflate64 archive of libjxl for Windows.
+      - name: Make sure 7-Zip is available
+        shell: python
+        run: |
+          import shutil, subprocess, sys
+          if not (shutil.which("7z") or shutil.which("7zz")):
+              if sys.platform == "darwin":
+                  subprocess.run(["brew", "install", "sevenzip"], check=True)
+              elif sys.platform.startswith("linux"):
+                  subprocess.run(["sudo", "apt-get", "install", "-y", "7zip"], check=True)
+              else:
+                  sys.exit("7-Zip is missing")
+
+      - uses: actions/cache@v6
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('scripts/fetch_tools.py') }}
+
+      - name: Download native libraries and test data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/fetch_tools.py --build-only
+
+      - name: Register the JDK as Maven toolchain
+        run: python scripts/write_toolchains.py --jdk "${{ env.JAVA_HOME }}"
+
+      - name: Build and test
+        if: runner.os != 'Windows'
+        run: ./mvnw -B verify
+
+      - name: Build and test
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: mvnw.cmd -B verify
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-reports-${{ matrix.name }}
+          path: "*/target/surefire-reports/"
+          if-no-files-found: ignore

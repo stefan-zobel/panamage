@@ -39,10 +39,13 @@ class PlatformTest {
         assertEquals(List.of("libbrotlidec.so.1", "libbrotlidec.so"), Platform.fileNames("linux-x86_64", "brotlidec"));
         assertEquals(List.of("libjxl_threads.0.12.dylib", "libjxl_threads.dylib"),
                 Platform.fileNames("macos-aarch64", "jxl_threads"));
+        assertEquals(List.of("libbrotlicommon.1.dylib", "libbrotlicommon.dylib"),
+                Platform.fileNames("macos-aarch64", "brotlicommon"));
     }
 
     @Test
     void theCurrentPlatformIsSupported() {
-        assertTrue(Set.of("windows-x86_64", "linux-x86_64").contains(Platform.current()), Platform.current());
+        assertTrue(Set.of("windows-x86_64", "linux-x86_64", "macos-aarch64").contains(Platform.current()),
+                Platform.current());
     }
 }

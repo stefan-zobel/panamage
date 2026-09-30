@@ -18,23 +18,10 @@ import sys
 from pathlib import Path
 
 from tools_dir import DEFAULT_TOOLS_DIR, ENVIRONMENT_VARIABLE, PROJECT_DIR, tools_dir
+from write_toolchains import write_toolchains
 
 LINUX_JDK_DIR = "jdk-25-linux-x86_64"
 TOOLCHAINS_FILE = "wsl-toolchains.xml"
-
-TOOLCHAINS = """<?xml version="1.0" encoding="UTF-8"?>
-<toolchains>
-  <toolchain>
-    <type>jdk</type>
-    <provides>
-      <version>25</version>
-    </provides>
-    <configuration>
-      <jdkHome>{jdk_home}</jdkHome>
-    </configuration>
-  </toolchain>
-</toolchains>
-"""
 
 
 def wsl_path(distro: str, path: Path) -> str:
@@ -60,7 +47,7 @@ def main() -> int:
 
     jdk_linux = wsl_path(args.distro, jdk)
     toolchains = tools / TOOLCHAINS_FILE
-    toolchains.write_text(TOOLCHAINS.format(jdk_home=jdk_linux), encoding="utf-8", newline="\n")
+    write_toolchains(jdk_linux, toolchains)
 
     command = " ".join([
         "cd", shlex.quote(wsl_path(args.distro, PROJECT_DIR)), "&&",

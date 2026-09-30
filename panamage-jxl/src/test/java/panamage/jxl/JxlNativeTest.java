@@ -20,8 +20,19 @@ class JxlNativeTest {
     @Test
     @DisabledIfSystemProperty(named = "panamage.jxl.library.path", matches = ".+")
     void loadsTheBundledLibrariesFromTheConfiguredCache() {
-        boolean windows = System.getProperty("os.name").startsWith("Windows");
-        String platform = windows ? "windows-x86_64" : "linux-x86_64";
+        String osName = System.getProperty("os.name");
+        String platform;
+        String libjxlFile;
+        if (osName.startsWith("Windows")) {
+            platform = "windows-x86_64";
+            libjxlFile = "jxl.dll";
+        } else if (osName.startsWith("Mac")) {
+            platform = "macos-aarch64";
+            libjxlFile = "libjxl.0.12.dylib";
+        } else {
+            platform = "linux-x86_64";
+            libjxlFile = "libjxl.so.0.12";
+        }
         String prefix = "bundled " + platform + " at ";
         String source = JxlNative.librarySource();
         assertTrue(source.startsWith(prefix), source);
@@ -30,7 +41,7 @@ class JxlNativeTest {
         Path cacheRoot = Path.of(System.getProperty("panamage.jxl.cache.dir"));
         assertEquals(cacheRoot.toAbsolutePath().normalize(), directory.getParent().toAbsolutePath().normalize());
         assertTrue(directory.getFileName().toString().startsWith(platform + "-0.12.0-"), source);
-        assertTrue(Files.isRegularFile(directory.resolve(windows ? "jxl.dll" : "libjxl.so.0.12")), source);
+        assertTrue(Files.isRegularFile(directory.resolve(libjxlFile)), source);
     }
 
     @Test

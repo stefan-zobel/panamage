@@ -39,3 +39,4 @@ panamage-jxl/src/test/resources/** -text -diff
 *.dll binary
 *.so binary
 *.so.* binary
+*.dylib binary

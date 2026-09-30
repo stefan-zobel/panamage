@@ -15,8 +15,13 @@ unpacked; the conformance files are taken from a pinned commit or verified
 against the digests in their test.json. Already unpacked tools are left
 untouched, so the script can be run repeatedly.
 
+The libraries for macOS are not downloaded; they are checked in under natives/.
+
 Usage:
-  python fetch_tools.py [--dest DIR] [--no-conformance]
+  python fetch_tools.py [--dest DIR] [--no-conformance] [--build-only]
+
+--build-only skips jextract and the Linux JDK, which only the helper scripts
+need (for example in continuous integration).
 """
 
 import argparse
@@ -24,6 +29,7 @@ import hashlib
 import io
 import json
 import lzma
+import os
 import shutil
 import subprocess
 import sys
@@ -92,7 +98,12 @@ CONFORMANCE_CASES = [
 
 
 def http_get(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "panamage-jxl-fetch-tools"})
+    headers = {"User-Agent": "panamage-jxl-fetch-tools"}
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token and url.startswith("https://api.github.com/"):
+        # Anonymous API requests are rate limited per IP address, which CI runners share.
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request) as response:
         return response.read()
 
@@ -133,10 +144,11 @@ def extract_zip(archive: Path, target: Path) -> None:
         if all(info.compress_type in supported for info in zf.infolist()):
             zf.extractall(target)
             return
-    seven_zip = shutil.which("7z")
+    # 7zz is the name of the 7-Zip command line tool on macOS.
+    seven_zip = shutil.which("7z") or shutil.which("7zz")
     if seven_zip is None:
         raise SystemExit(f"{archive.name} uses a compression method (e.g. Deflate64) "
-                         "that Python cannot extract; install 7-Zip and put 7z on the PATH")
+                         "that Python cannot extract; install 7-Zip and put 7z (or 7zz) on the PATH")
     print(f"Extracting {archive.name} with {seven_zip}")
     subprocess.run([seven_zip, "x", "-y", f"-o{target}", str(archive)],
                    check=True, stdout=subprocess.DEVNULL)
@@ -303,14 +315,18 @@ def main() -> int:
                         help=f"target directory (default: ${ENVIRONMENT_VARIABLE} or {DEFAULT_TOOLS_DIR})")
     parser.add_argument("--no-conformance", action="store_true",
                         help="do not download the conformance test cases (about 45 MB)")
+    parser.add_argument("--build-only", action="store_true",
+                        help="download only what the Maven build needs (no jextract, no Linux JDK for WSL)")
     args = parser.parse_args()
     dest_root = tools_dir(args.dest)
     downloads = dest_root / "_downloads"
     downloads.mkdir(parents=True, exist_ok=True)
-    fetch_jextract(dest_root, downloads)
+    if not args.build_only:
+        fetch_jextract(dest_root, downloads)
     fetch_libjxl(dest_root, downloads)
     fetch_libjxl_linux(dest_root, downloads)
-    fetch_linux_jdk(dest_root, downloads)
+    if not args.build_only:
+        fetch_linux_jdk(dest_root, downloads)
     if not args.no_conformance:
         fetch_conformance(dest_root)
     return 0

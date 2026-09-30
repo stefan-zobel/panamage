@@ -12,6 +12,7 @@ Writes to the output directory:
   * the same name with .sha256, in the format of shasum
 
 Runs on macOS arm64 only; it is used by .github/workflows/libjxl-macos.yml.
+The content of the archive is checked in under natives/ (see natives/README.md).
 
 Usage:
   python build_libjxl_macos.py [--work DIR] [--output DIR]
