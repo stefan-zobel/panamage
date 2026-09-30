@@ -1,0 +1,48 @@
+# Builds the libjxl shared libraries for macOS arm64 from source (libjxl
+# publishes no macOS binaries) and, on request, attaches them to a GitHub
+# release, from where scripts/fetch_tools.py downloads them.
+name: libjxl for macOS arm64
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Attach the archive to a GitHub release (otherwise only a workflow artifact)
+        type: boolean
+        default: false
+      release_tag:
+        description: Tag of the release to create
+        type: string
+        default: natives-libjxl-0.12.0-1
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build and check libjxl
+        run: python scripts/build_libjxl_macos.py --output dist/natives
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libjxl-macos-aarch64
+          path: dist/natives/
+
+      - name: Publish as release
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release create "$TAG" dist/natives/* \
+            --prerelease \
+            --title "$TAG" \
+            --notes "libjxl 0.12.0 (commit a7a9c787341cf703dede03c2009fa460cae5e5df) for macOS 11 or newer on arm64, built by the workflow 'libjxl for macOS arm64' from $GITHUB_SHA with scripts/build_libjxl_macos.py (shared libraries only; Highway linked statically, skcms as color management). Used by scripts/fetch_tools.py; not a panamage release."
