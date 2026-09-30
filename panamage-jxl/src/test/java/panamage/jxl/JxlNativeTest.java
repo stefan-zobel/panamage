@@ -30,7 +30,7 @@ class JxlNativeTest {
             platform = "macos-aarch64";
             libjxlFile = "libjxl.0.12.dylib";
         } else {
-            platform = "linux-x86_64";
+            platform = System.getProperty("os.arch").equals("aarch64") ? "linux-aarch64" : "linux-x86_64";
             libjxlFile = "libjxl.so.0.12";
         }
         String prefix = "bundled " + platform + " at ";

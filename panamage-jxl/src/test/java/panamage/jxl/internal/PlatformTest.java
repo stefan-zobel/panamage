@@ -45,7 +45,7 @@ class PlatformTest {
 
     @Test
     void theCurrentPlatformIsSupported() {
-        assertTrue(Set.of("windows-x86_64", "linux-x86_64", "macos-aarch64").contains(Platform.current()),
+        assertTrue(Set.of("windows-x86_64", "linux-x86_64", "linux-aarch64", "macos-aarch64").contains(Platform.current()),
                 Platform.current());
     }
 }

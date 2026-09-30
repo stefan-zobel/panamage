@@ -48,6 +48,7 @@
 		<module>panamage-jxl-spi</module>
 		<module>panamage-jxl-natives-windows-x86_64</module>
 		<module>panamage-jxl-natives-linux-x86_64</module>
+		<module>panamage-jxl-natives-linux-aarch64</module>
 		<module>panamage-jxl-natives-macos-aarch64</module>
 		<module>panamage-jxl</module>
 		<module>panamage-jxl-imageio</module>
@@ -63,6 +64,9 @@
 		<jxl.native.dir>${tools.dir}/libjxl-0.12.0</jxl.native.dir>
 		<!-- libjxl and Brotli shared libraries for Linux x86_64 (lib, licenses). -->
 		<jxl.native.linux.dir>${tools.dir}/libjxl-0.12.0-linux-x86_64</jxl.native.linux.dir>
+		<!-- libjxl and Brotli shared libraries for Linux aarch64 (lib, licenses), checked in because
+		     libjxl publishes no binaries for 64-bit ARM; see natives/README.md. -->
+		<jxl.native.linux.aarch64.dir>${maven.multiModuleProjectDirectory}/natives/libjxl-0.12.0-linux-aarch64</jxl.native.linux.aarch64.dir>
 		<!-- libjxl and Brotli shared libraries for macOS arm64 (lib, licenses), checked in because
 		     libjxl publishes no macOS binaries; see natives/README.md. -->
 		<jxl.native.macos.dir>${maven.multiModuleProjectDirectory}/natives/libjxl-0.12.0-macos-aarch64</jxl.native.macos.dir>
@@ -87,6 +91,11 @@
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>panamage-jxl-natives-linux-x86_64</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>${project.groupId}</groupId>
+				<artifactId>panamage-jxl-natives-linux-aarch64</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

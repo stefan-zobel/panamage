@@ -33,9 +33,9 @@ bundled; nothing needs to be installed.
 - **Protection against decompression bombs:** images beyond 256 megapixels and
   metadata boxes beyond 16 MiB are rejected before their memory is allocated;
   both limits are configurable.
-- **Bundled native libraries** for Windows and Linux on x86_64 and for macOS
-  on Apple silicon, found through a service interface on both the class path
-  and the module path.
+- **Bundled native libraries** for Windows on x86_64, Linux on x86_64 and
+  aarch64, and macOS on Apple silicon, found through a service interface on
+  both the class path and the module path.
 - **Tested against the reference images** of selected test cases of the
   official [JPEG XL conformance corpus](https://github.com/libjxl/conformance)
   (gray, float, alpha, orientation, animation, JPEG reconstruction).
@@ -44,9 +44,10 @@ bundled; nothing needs to be installed.
 
 - JDK 25 or newer
 - Windows 10 or newer on x86_64, Linux on x86_64 with glibc 2.29 or newer
-  (for example Ubuntu 20.04, Debian 11, RHEL 9 or newer), or macOS 11 or newer
-  on Apple silicon (arm64). musl-based systems such as Alpine Linux are not
-  supported yet.
+  (for example Ubuntu 20.04, Debian 11, RHEL 9 or newer), Linux on aarch64
+  with glibc 2.28 or newer (for example Ubuntu 20.04, Debian 10, RHEL 8,
+  Amazon Linux 2023 or newer), or macOS 11 or newer on Apple silicon (arm64).
+  musl-based systems such as Alpine Linux are not supported yet.
 
 ## Getting started
 
@@ -72,7 +73,7 @@ For your own application, put these JARs on the class path or module path:
 | `panamage-jxl` | Decoder, encoder, JPEG transcoding (`panamage.jxl`) |
 | `panamage-jxl-imageio` | Image I/O plugin (`panamage.jxl.imageio`) |
 | `panamage-jxl-spi` | Service interface for the native libraries |
-| `panamage-jxl-natives-windows-x86_64`, `panamage-jxl-natives-linux-x86_64` or `panamage-jxl-natives-macos-aarch64` | libjxl for the platform |
+| `panamage-jxl-natives-windows-x86_64`, `panamage-jxl-natives-linux-x86_64`, `panamage-jxl-natives-linux-aarch64` or `panamage-jxl-natives-macos-aarch64` | libjxl for the platform |
 
 ## Usage
 
@@ -182,9 +183,9 @@ The loaded library must have the libjxl version the bindings were generated
 for (0.12.x). `JxlNative.librarySource()` tells where the library came from.
 
 On Windows, libjxl needs the Microsoft Visual C++ runtime, which every JDK
-ships in its `bin` directory. libjxl publishes no macOS binaries; the libraries
-for macOS are built from the libjxl sources by this project (see
-[natives/README.md](natives/README.md)).
+ships in its `bin` directory. libjxl publishes no binaries for macOS and for
+Linux on aarch64; the libraries for these platforms are built from the libjxl
+sources by this project (see [natives/README.md](natives/README.md)).
 
 ## Building from source
 
@@ -219,7 +220,7 @@ python scripts/fetch_tools.py
 `python scripts/fetch_tools.py --no-conformance` leaves out the conformance
 test cases; the conformance tests are then skipped. `--build-only` leaves out
 jextract and the Linux JDK, which only the helper scripts need. The libraries
-for macOS are checked in under `natives/`.
+for macOS and Linux aarch64 are checked in under `natives/`.
 
 The tools go to `.tools` in the project. To keep them elsewhere, set the
 environment variable `PANAMAGE_TOOLS_DIR` or pass `-Dtools.dir=...` to Maven
@@ -241,9 +242,9 @@ Other scripts in `scripts/`:
 
 Three GitHub Actions workflows, all started manually (Actions, Run workflow):
 
-- **Build** builds the project and runs all tests on Linux x86_64, macOS arm64
-  and Windows x86_64, each with its own native libraries; the platforms can be
-  chosen when starting it. The test reports are kept as workflow artifacts.
+- **Build** builds the project and runs all tests on Linux x86_64, Linux
+  aarch64, macOS arm64 and Windows x86_64, each with its own native libraries;
+  the platforms can be chosen when starting it. The test reports are kept as workflow artifacts.
 - **libjxl for macOS arm64** builds the libjxl libraries for macOS from source
   and checks them; its artifact is what `natives/` contains.
 - **libjxl for Linux aarch64** does the same for Linux on 64-bit ARM, in the
@@ -257,8 +258,8 @@ Three GitHub Actions workflows, all started manually (Actions, Run workflow):
 - Whole images are held in memory; there is no streaming or progressive API yet.
 - The Image I/O writer converts images without a component color model (for
   example `TYPE_INT_RGB` or indexed images) to 8-bit sRGB.
-- Native libraries for macOS on Intel (x86_64), Linux on aarch64 and
-  musl-based Linux are not available yet.
+- Native libraries for macOS on Intel (x86_64) and for musl-based Linux are
+  not available yet.
 
 ## License
 

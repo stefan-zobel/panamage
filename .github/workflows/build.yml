@@ -11,6 +11,7 @@ on:
         options:
           - all
           - linux
+          - linux-aarch64
           - macos
           - windows
         default: all
@@ -35,7 +36,8 @@ jobs:
           PLATFORMS: ${{ inputs.platforms }}
         run: |
           import json, os
-          runners = {"linux": "ubuntu-24.04", "macos": "macos-15", "windows": "windows-2025"}
+          runners = {"linux": "ubuntu-24.04", "linux-aarch64": "ubuntu-24.04-arm",
+                     "macos": "macos-15", "windows": "windows-2025"}
           chosen = os.environ["PLATFORMS"]
           include = [{"name": name, "os": os_} for name, os_ in runners.items() if chosen in ("all", name)]
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
@@ -77,7 +79,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .tools
-          key: tools-${{ runner.os }}-${{ hashFiles('scripts/fetch_tools.py') }}
+          key: tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch_tools.py') }}
 
       - name: Download native libraries and test data
         env:
