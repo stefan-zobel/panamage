@@ -15,20 +15,26 @@ bundled; nothing needs to be installed.
 
 ## Features
 
-- **Decode** JPEG XL (codestream and container) to 8-bit gray, gray+alpha, RGB
-  or RGBA, upright according to the image orientation.
-- **Encode** 8-bit images lossless or lossy, with a quality (0 to 100) or
-  Butteraugli distance and an effort from 1 to 10.
+- **Decode** JPEG XL (codestream and container) to gray, gray+alpha, RGB or
+  RGBA with 8-bit, 16-bit or floating point samples, upright according to the
+  image orientation.
+- **Encode** 8-bit, 16-bit and floating point images lossless or lossy, with a
+  quality (0 to 100) or Butteraugli distance and an effort from 1 to 10.
+  Lossless encoding reproduces every sample exactly, including HDR values.
 - **Lossless JPEG transcoding:** repack an existing JPEG as JPEG XL, typically
   10 to 20 percent smaller, and restore the original JPEG bit for bit.
 - **Metadata:** EXIF and XMP are read and written; EXIF orientation and the
   image orientation are kept consistent.
-- **Color:** images that are not sRGB (for example lossless wide-gamut images)
-  keep their ICC profile.
+- **Color:** images that are not sRGB (for example wide-gamut images) keep
+  their ICC profile, when reading and when writing.
 - **Image I/O plugin** with reader, writer, write parameters (lossy/lossless,
-  quality, effort) and image metadata.
+  quality, effort) and image metadata. 16-bit and floating point images are
+  read and written with full precision.
 - **Bundled native libraries** for Windows and Linux on x86_64, found through
   a service interface on both the class path and the module path.
+- **Tested against the reference images** of selected test cases of the
+  official [JPEG XL conformance corpus](https://github.com/libjxl/conformance)
+  (gray, float, alpha, orientation, animation, JPEG reconstruction).
 
 ## Requirements
 
@@ -107,13 +113,22 @@ byte[] restored = JxlTranscoder.toJpeg(jxl);             // identical to jpeg
 ### Decoder and encoder
 
 ```java
-JxlImageInfo info = JxlDecoder.readInfo(data);            // size, channels, ICC; no pixels
-JxlImage image = JxlDecoder.decode(data, info.channels()); // 8-bit samples
+JxlImageInfo info = JxlDecoder.readInfo(data);            // size, channels, bit depth, ICC; no pixels
+JxlImage image = JxlDecoder.decode(data, info.channels(), info.sampleType());
 JxlMetadata metadata = JxlDecoder.readMetadata(data);     // EXIF and XMP
+
+switch (image) {
+    case JxlImage.Uint8 img -> process(img.pixels());     // byte[]
+    case JxlImage.Uint16 img -> process(img.pixels());    // short[], unsigned
+    case JxlImage.Float32 img -> process(img.pixels());   // float[], nominally 0.0 to 1.0
+}
 
 byte[] lossless = JxlEncoder.encode(image, JxlEncodeOptions.ofLossless());
 byte[] lossy = JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90).withEffort(9), metadata);
 ```
+
+`JxlDecoder.decode(data)` and `decode(data, channels)` return 8-bit samples
+(`JxlImage.Uint8`).
 
 ## Native libraries
 
@@ -154,12 +169,15 @@ Prerequisites:
 - On Windows, 7-Zip (`7z` on the `PATH`) to unpack the libjxl archive.
 
 Download the external tools (libjxl for Windows and Linux, jextract, a Linux
-JDK for tests in WSL) and build:
+JDK for tests in WSL, and about 45 MB of conformance test cases) and build:
 
 ```sh
 python scripts/fetch_tools.py
 ./mvnw verify            # mvnw.cmd on Windows
 ```
+
+`python scripts/fetch_tools.py --no-conformance` leaves out the conformance
+test cases; the conformance tests are then skipped.
 
 The tools go to `.tools` in the project. To keep them elsewhere, set the
 environment variable `PANAMAGE_TOOLS_DIR` or pass `-Dtools.dir=...` to Maven
@@ -176,10 +194,12 @@ Other scripts in `scripts/`:
 
 ## Limitations
 
-- Only 8 bits per sample; images with more bits are reduced to 8 bits.
+- Integer samples with more than 16 bits are decoded as floating point; 16-bit
+  floating point (half precision) is not supported as a sample type.
 - Only the first frame of an animation is decoded.
 - Whole images are held in memory; there is no streaming or progressive API yet.
-- When writing, images that are not sRGB are converted to sRGB.
+- The Image I/O writer converts images without a component color model (for
+  example `TYPE_INT_RGB` or indexed images) to 8-bit sRGB.
 - Native libraries for macOS, Linux on aarch64 and musl-based Linux are not
   available yet.
 

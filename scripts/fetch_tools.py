@@ -7,13 +7,16 @@ Tools:
     20.04 packages of the GitHub release, plus the Brotli libraries they
     depend on (Ubuntu 20.04 archive)
   * a JDK 25 for Linux x86_64, to build and test in WSL
+  * selected test cases of the JPEG XL conformance corpus (about 45 MB) for
+    the conformance tests; the tests are skipped without them
 
 Every archive is verified against its published SHA-256 digest before it is
-unpacked. Already unpacked tools are left untouched, so the script can be run
-repeatedly.
+unpacked; the conformance files are taken from a pinned commit or verified
+against the digests in their test.json. Already unpacked tools are left
+untouched, so the script can be run repeatedly.
 
 Usage:
-  python fetch_tools.py [--dest DIR]
+  python fetch_tools.py [--dest DIR] [--no-conformance]
 """
 
 import argparse
@@ -66,6 +69,26 @@ BROTLI_LIBRARIES = {
 
 LINUX_JDK_PACKAGE_API = "https://api.azul.com/metadata/v1/zulu/packages/f588d0ab-4c15-4b9f-bb65-63f29c3a28d0"
 LINUX_JDK_DIR = "jdk-25-linux-x86_64"
+
+# Test cases of the JPEG XL conformance corpus (github.com/libjxl/conformance),
+# chosen to cover what the bindings must get right: gray and color, bit depths,
+# alpha, color spaces, orientation, animations and JPEG reconstruction.
+CONFORMANCE_COMMIT = "b1d0f990b03e57bf6d137c365cd5dc8b470b9191"
+CONFORMANCE_DIR = f"conformance-{CONFORMANCE_COMMIT[:7]}"
+CONFORMANCE_FILES_URL = f"https://raw.githubusercontent.com/libjxl/conformance/{CONFORMANCE_COMMIT}/testcases/"
+# The large files are stored by their SHA-256, as listed in test.json.
+CONFORMANCE_OBJECTS_URL = "https://storage.googleapis.com/jxl-conformance/objects/"
+CONFORMANCE_CASES = [
+    "alpha_premultiplied",
+    "animation_icos4d",
+    "bench_oriented_brg",
+    "grayscale",
+    "grayscale_jpeg",
+    "lossless_pfm",
+    "mul_no_extra_channels",
+    "noise",
+    "opsin_inverse",
+]
 
 
 def http_get(url: str) -> bytes:
@@ -251,10 +274,35 @@ def fetch_linux_jdk(dest_root: Path, downloads: Path) -> None:
     print(f"Linux JDK unpacked to {dest}")
 
 
+def fetch_conformance(dest_root: Path) -> None:
+    """Downloads the selected conformance test cases; corpus.txt marks a complete download."""
+    dest = dest_root / CONFORMANCE_DIR
+    corpus = dest / "corpus.txt"
+    if corpus.exists():
+        print(f"{dest} already exists, skipping the conformance test cases")
+        return
+    for case in CONFORMANCE_CASES:
+        case_dir = dest / case
+        case_dir.mkdir(parents=True, exist_ok=True)
+        # The files in the repository are fixed by the pinned commit.
+        for name in ("test.json", "input.jxl"):
+            download(CONFORMANCE_FILES_URL + f"{case}/{name}", case_dir / name)
+        sha256sums = json.loads((case_dir / "test.json").read_bytes())["sha256sums"]
+        for name, sha256 in sha256sums.items():
+            download(CONFORMANCE_OBJECTS_URL + sha256, case_dir / name)
+            verify(case_dir / name, sha256)
+        if "reference_image.npy" not in sha256sums:
+            download(CONFORMANCE_FILES_URL + f"{case}/reference_image.npy", case_dir / "reference_image.npy")
+    corpus.write_text("".join(f"{case}\n" for case in CONFORMANCE_CASES), encoding="ascii", newline="\n")
+    print(f"Conformance test cases downloaded to {dest}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dest", type=Path, default=None,
                         help=f"target directory (default: ${ENVIRONMENT_VARIABLE} or {DEFAULT_TOOLS_DIR})")
+    parser.add_argument("--no-conformance", action="store_true",
+                        help="do not download the conformance test cases (about 45 MB)")
     args = parser.parse_args()
     dest_root = tools_dir(args.dest)
     downloads = dest_root / "_downloads"
@@ -263,6 +311,8 @@ def main() -> int:
     fetch_libjxl(dest_root, downloads)
     fetch_libjxl_linux(dest_root, downloads)
     fetch_linux_jdk(dest_root, downloads)
+    if not args.no_conformance:
+        fetch_conformance(dest_root)
     return 0
 
 
