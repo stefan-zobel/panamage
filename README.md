@@ -9,7 +9,7 @@ JPEG XL and back, reads and writes EXIF and XMP metadata, and plugs into
 `ImageIO.write(image, "jxl", ...)` without changes. The native libraries are
 bundled; nothing needs to be installed.
 
-> **Status:** 0.0.1, an early release for trying things out. The API may change.
+> **Status:** 0.0.2, an early release for trying things out. The API may change.
 > panamage is not yet published on Maven Central; download it from the
 > [Releases](../../releases) page.
 
@@ -50,9 +50,9 @@ bundled; nothing needs to be installed.
 
 ## Getting started
 
-Download `panamage-0.0.1-windows-x86_64.zip` or
-`panamage-0.0.1-linux-x86_64.tar.gz` from the [Releases](../../releases) page
-and unpack it. It contains the JARs, a README and a small example program:
+Download `panamage-0.0.2-windows-x86_64.zip`,
+`panamage-0.0.2-linux-x86_64.tar.gz` or `panamage-0.0.2-macos-aarch64.tar.gz`
+from the [Releases](../../releases) page and unpack it. It contains the JARs, a README and a small example program:
 
 ```sh
 # class path
