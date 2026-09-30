@@ -1,8 +1,10 @@
 # Prebuilt native libraries
 
-libjxl publishes no binaries for macOS, so the libraries for macOS are built
-by this project and checked in here. The other platforms use the binaries of
-the libjxl releases, downloaded by `scripts/fetch_tools.py`.
+libjxl publishes no binaries for macOS and for Linux on aarch64, so the
+libraries for these platforms are built from source by this project and
+checked in here. The other platforms use the binaries of the libjxl releases,
+downloaded by `scripts/fetch_tools.py`. The build scripts share the checkout,
+the common CMake options and the packing in `scripts/libjxl_source.py`.
 
 ## libjxl-0.12.0-macos-aarch64
 
@@ -14,7 +16,8 @@ they need; Highway is linked statically.
   `a7a9c787341cf703dede03c2009fa460cae5e5df`, with the submodules brotli,
   highway and skcms.
 - Built by the workflow `.github/workflows/libjxl-macos.yml` (manual start)
-  with `scripts/build_libjxl_macos.py`, which lists the CMake options.
+  with `scripts/build_libjxl_macos.py`; the CMake options are listed there and
+  in `scripts/libjxl_source.py`.
 - Checked by the script: install names `@rpath/<file name>`, no dependencies
   besides these libraries, `libSystem` and `libc++`, `@loader_path` as the only
   run path, arm64 only, minimum macOS 11.0, valid signatures.

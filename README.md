@@ -234,17 +234,20 @@ Other scripts in `scripts/`:
 | `wsl_verify.py` | Build and run all tests on Linux in WSL (from Windows) |
 | `make_release.py` | Build the release files in `dist/<version>` (`--wsl` also tests on Linux) |
 | `build_libjxl_macos.py` | Build the libjxl libraries for macOS arm64 from source (on macOS; used by the workflow below) |
+| `build_libjxl_linux_aarch64.py` | Build the libjxl libraries for Linux aarch64 from source (in the manylinux_2_28 container; used by the workflow below) |
 | `write_toolchains.py` | Write a Maven toolchains file for a JDK 25 |
 
 ## Continuous integration
 
-Two GitHub Actions workflows, both started manually (Actions, Run workflow):
+Three GitHub Actions workflows, all started manually (Actions, Run workflow):
 
 - **Build** builds the project and runs all tests on Linux x86_64, macOS arm64
   and Windows x86_64, each with its own native libraries; the platforms can be
   chosen when starting it. The test reports are kept as workflow artifacts.
 - **libjxl for macOS arm64** builds the libjxl libraries for macOS from source
   and checks them; its artifact is what `natives/` contains.
+- **libjxl for Linux aarch64** does the same for Linux on 64-bit ARM, in the
+  manylinux_2_28 container (glibc 2.28).
 
 ## Limitations
 

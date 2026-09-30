@@ -1,11 +1,17 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
+	child.project.url.inherit.append.path="false">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>net.sourceforge.streamsupport</groupId>
 	<artifactId>panamage</artifactId>
 	<version>0.0.3-SNAPSHOT</version>
 	<packaging>pom</packaging>
+
+	<name>panamage</name>
+	<description>JPEG XL for Java, based on libjxl and the Foreign Function and Memory API</description>
+	<url>https://github.com/stefan-zobel/panamage</url>
+	<inceptionYear>2026</inceptionYear>
 
 	<licenses>
 		<license>
@@ -14,6 +20,29 @@
 			<distribution>repo</distribution>
 		</license>
 	</licenses>
+
+	<developers>
+		<developer>
+			<id>stefan-zobel</id>
+			<name>Stefan Zobel</name>
+			<url>https://github.com/stefan-zobel</url>
+		</developer>
+	</developers>
+
+	<!-- The modules share the repository, so the URLs are inherited without appending the artifactId. -->
+	<scm child.scm.connection.inherit.append.path="false"
+		child.scm.developerConnection.inherit.append.path="false"
+		child.scm.url.inherit.append.path="false">
+		<connection>scm:git:https://github.com/stefan-zobel/panamage.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/stefan-zobel/panamage.git</developerConnection>
+		<url>https://github.com/stefan-zobel/panamage</url>
+		<tag>HEAD</tag>
+	</scm>
+
+	<issueManagement>
+		<system>GitHub Issues</system>
+		<url>https://github.com/stefan-zobel/panamage/issues</url>
+	</issueManagement>
 
 	<modules>
 		<module>panamage-jxl-spi</module>
