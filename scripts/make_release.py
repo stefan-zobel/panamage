@@ -2,12 +2,12 @@
 
 Builds the project with all tests (optionally also on Linux in WSL) and writes
 to dist/<version>/:
-  * the seven JARs
-  * panamage-<version>-windows-x86_64.zip, panamage-<version>-linux-x86_64.tar.gz,
-    panamage-<version>-linux-aarch64.tar.gz and
-    panamage-<version>-macos-aarch64.tar.gz, each with the JARs for the
-    platform, README.txt, Example.java, LICENSE and the licenses of the bundled
-    native libraries
+  * the JARs of all modules
+  * panamage-<version>-<platform>.zip for windows-x86_64 and
+    panamage-<version>-<platform>.tar.gz for linux-x86_64, linux-aarch64,
+    linux-musl-x86_64, linux-musl-aarch64 and macos-aarch64, each with the
+    JARs for the platform, README.txt, Example.java, LICENSE and the licenses
+    of the bundled native libraries
   * SHA256SUMS for all files, in the format of sha256sum
 
 With --central, it also writes central/panamage-<version>-central.zip, the
@@ -68,14 +68,26 @@ PLATFORMS = {
     "linux-x86_64": {
         "archive": "tar.gz",
         "requirements": "Linux on x86_64 with glibc 2.29 or newer (for example Ubuntu 20.04,\n"
-                        "  Debian 11, RHEL 9 or newer); musl-based systems such as Alpine are\n"
-                        "  not supported",
+                        "  Debian 11, RHEL 9 or newer); for musl-based systems such as\n"
+                        "  Alpine, use the linux-musl-x86_64 archive",
     },
     "linux-aarch64": {
         "archive": "tar.gz",
         "requirements": "Linux on aarch64 (64-bit ARM) with glibc 2.28 or newer (for example\n"
                         "  Ubuntu 20.04, Debian 10, RHEL 8, Amazon Linux 2023 or newer);\n"
-                        "  musl-based systems such as Alpine are not supported",
+                        "  for musl-based systems such as Alpine, use the linux-musl-aarch64\n"
+                        "  archive",
+    },
+    "linux-musl-x86_64": {
+        "archive": "tar.gz",
+        "requirements": "Linux on x86_64 with the musl C library 1.2.4 or newer (for example\n"
+                        "  Alpine Linux 3.18 or newer); nothing else needs to be installed",
+    },
+    "linux-musl-aarch64": {
+        "archive": "tar.gz",
+        "requirements": "Linux on aarch64 (64-bit ARM) with the musl C library 1.2.4 or newer\n"
+                        "  (for example Alpine Linux 3.18 or newer); nothing else needs to be\n"
+                        "  installed",
     },
     "macos-aarch64": {
         "archive": "tar.gz",
