@@ -2,10 +2,9 @@ package panamage.jxl;
 
 import static java.lang.foreign.MemorySegment.NULL;
 import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
@@ -90,23 +89,35 @@ final class NativeEncoder implements AutoCloseable {
      * small size to exercise the multi-chunk path).
      */
     byte[] collectOutput(Arena arena, int chunkSize) {
+        return OutputSink.toBytes(sink -> writeOutput(arena, sink, chunkSize));
+    }
+
+    /**
+     * Runs the encoder until all input is encoded and writes the output to the
+     * sink, one buffer of the given size at a time. The input must have been
+     * closed with {@code JxlEncoderCloseInput}.
+     *
+     * @return the number of bytes written
+     * @throws IOException  if the sink fails
+     * @throws JxlException if encoding fails
+     */
+    long writeOutput(Arena arena, OutputSink sink, int chunkSize) throws IOException {
         if (chunkSize < MIN_OUTPUT_CHUNK_SIZE) {
             throw new IllegalArgumentException("chunkSize must be at least " + MIN_OUTPUT_CHUNK_SIZE);
         }
         MemorySegment chunk = arena.allocate(chunkSize);
         MemorySegment nextOut = arena.allocate(ADDRESS);
         MemorySegment availOut = arena.allocate(JAVA_LONG);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
         int status;
         do {
             nextOut.set(ADDRESS, 0L, chunk);
             availOut.set(JAVA_LONG, 0L, chunk.byteSize());
             status = Jxl.JxlEncoderProcessOutput(handle, nextOut, availOut);
             long written = chunk.byteSize() - availOut.get(JAVA_LONG, 0L);
-            out.write(chunk.asSlice(0L, written).toArray(JAVA_BYTE), 0, (int) written);
+            sink.write(chunk.asSlice(0L, written));
         } while (status == Jxl.JXL_ENC_NEED_MORE_OUTPUT());
         check(status, "JxlEncoderProcessOutput");
-        return out.toByteArray();
+        return sink.written();
     }
 
     /**

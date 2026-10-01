@@ -3,6 +3,7 @@ package panamage.jxl.imageio;
 import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
+import java.io.OutputStream;
 
 import javax.imageio.IIOException;
 import javax.imageio.IIOImage;
@@ -35,6 +36,9 @@ import panamage.jxl.JxlMetadata;
  * {@code write} keeps them. An EXIF orientation is applied as the image
  * orientation, so images read from JPEG files are displayed as intended.
  * Thumbnails are not written.
+ * <p>
+ * The encoded image is written to the output stream as it is produced. If
+ * encoding fails, the stream may contain part of the image.
  *
  * @see JxlImageWriteParam
  */
@@ -135,15 +139,33 @@ public final class JxlImageWriter extends ImageWriter {
             return;
         }
 
-        byte[] encoded;
         try {
-            encoded = JxlEncoder.encode(pixels, JxlImageWriteParam.toOptions(param), metadata);
+            JxlEncoder.encode(pixels, JxlImageWriteParam.toOptions(param), metadata, new StreamAdapter(output));
         } catch (JxlException e) {
             throw new IIOException("Cannot encode JPEG XL image: " + e.getMessage(), e);
         }
-        output.write(encoded);
         output.flush();
         processImageProgress(100.0f);
         processImageComplete();
+    }
+
+    /** Lets the encoder write directly to the image output stream; closing it has no effect. */
+    private static final class StreamAdapter extends OutputStream {
+
+        private final ImageOutputStream output;
+
+        StreamAdapter(ImageOutputStream output) {
+            this.output = output;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            output.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            output.write(b, off, len);
+        }
     }
 }

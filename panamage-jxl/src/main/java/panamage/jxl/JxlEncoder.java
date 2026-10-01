@@ -4,8 +4,11 @@ import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_FLOAT;
 import static java.lang.foreign.ValueLayout.JAVA_SHORT;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
@@ -22,9 +25,10 @@ import panamage.jxl.ffi.JxlPixelFormat;
  * color space of its ICC profile; the profile must match the channels (gray or
  * RGB). The image is stored with the bit depth of its sample type, so lossless
  * encoding reproduces every sample exactly, including floating point values
- * outside the range 0.0 to 1.0. The output is a bare JPEG XL codestream. The
- * encoder uses libjxl's native thread pool, so no Java code is called back from
- * native threads.
+ * outside the range 0.0 to 1.0. The output is a bare JPEG XL codestream,
+ * returned as a byte array or written to an {@link OutputStream} or a
+ * {@link WritableByteChannel} as it is produced. The encoder uses libjxl's
+ * native thread pool, so no Java code is called back from native threads.
  */
 public final class JxlEncoder {
 
@@ -71,6 +75,62 @@ public final class JxlEncoder {
      * @throws JxlException             if libjxl rejects the image, the settings or the metadata
      */
     public static byte[] encode(JxlImage image, JxlEncodeOptions options, JxlMetadata metadata) {
+        return OutputSink.toBytes(sink -> encode(image, options, metadata, sink, NativeEncoder.OUTPUT_CHUNK_SIZE));
+    }
+
+    /**
+     * Encodes an image with the given options and metadata and writes the
+     * result to a stream, piece by piece, without holding the whole output in
+     * memory.
+     * <p>
+     * The stream is neither flushed nor closed. If an exception is thrown,
+     * part of the output may already have been written.
+     *
+     * @param image    the image to encode
+     * @param options  the encoder settings
+     * @param metadata the EXIF and XMP metadata to store
+     * @param out      the stream that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the stream fails
+     * @throws IllegalArgumentException if the image has more than 4 channels
+     * @throws JxlException             if libjxl rejects the image, the settings or the metadata
+     * @see #encode(JxlImage, JxlEncodeOptions, JxlMetadata)
+     */
+    public static long encode(JxlImage image, JxlEncodeOptions options, JxlMetadata metadata, OutputStream out)
+            throws IOException {
+        return encode(image, options, metadata, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
+    }
+
+    /**
+     * Encodes an image with the given options and metadata and writes the
+     * result to a channel, piece by piece, without holding the whole output in
+     * memory or copying it to the Java heap.
+     * <p>
+     * The channel must be in blocking mode; it is not closed. If an exception
+     * is thrown, part of the output may already have been written.
+     *
+     * @param image    the image to encode
+     * @param options  the encoder settings
+     * @param metadata the EXIF and XMP metadata to store
+     * @param out      the channel that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the channel fails
+     * @throws IllegalArgumentException if the image has more than 4 channels or
+     *                                  the channel is in non-blocking mode
+     * @throws JxlException             if libjxl rejects the image, the settings or the metadata
+     * @see #encode(JxlImage, JxlEncodeOptions, JxlMetadata)
+     */
+    public static long encode(JxlImage image, JxlEncodeOptions options, JxlMetadata metadata,
+            WritableByteChannel out) throws IOException {
+        return encode(image, options, metadata, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
+    }
+
+    /**
+     * Encodes an image to a sink, with a given output buffer size (tests use a
+     * small size to exercise the multi-chunk path).
+     */
+    static long encode(JxlImage image, JxlEncodeOptions options, JxlMetadata metadata, OutputSink sink,
+            int chunkSize) throws IOException {
         Objects.requireNonNull(image, "image");
         Objects.requireNonNull(options, "options");
         Objects.requireNonNull(metadata, "metadata");
@@ -87,7 +147,7 @@ public final class JxlEncoder {
             addBoxes(encoder, metadata, arena);
             // Closes the frames and, if used, the boxes.
             Jxl.JxlEncoderCloseInput(encoder.handle());
-            return encoder.collectOutput(arena);
+            return encoder.writeOutput(arena, sink, chunkSize);
         }
     }
 

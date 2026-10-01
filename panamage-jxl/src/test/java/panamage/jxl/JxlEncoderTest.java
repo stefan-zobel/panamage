@@ -2,10 +2,16 @@ package panamage.jxl;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.WritableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -158,6 +164,99 @@ class JxlEncoderTest {
     void rejectsMoreThanFourChannels() {
         JxlImage.Uint8 fiveChannels = new JxlImage.Uint8(2, 2, 5, new byte[2 * 2 * 5]);
         assertThrows(IllegalArgumentException.class, () -> JxlEncoder.encode(fiveChannels));
+    }
+
+    @Test
+    void streamAndChannelOutputEqualTheByteArray() throws IOException {
+        JxlEncodeOptions options = JxlEncodeOptions.ofLossless();
+        byte[] expected = JxlEncoder.encode(TestImages.gradientRgba(), options);
+
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        long streamed = JxlEncoder.encode(TestImages.gradientRgba(), options, JxlMetadata.NONE, stream);
+        ByteArrayOutputStream channelTarget = new ByteArrayOutputStream();
+        long channeled;
+        try (WritableByteChannel channel = Channels.newChannel(channelTarget)) {
+            channeled = JxlEncoder.encode(TestImages.gradientRgba(), options, JxlMetadata.NONE, channel);
+        }
+
+        assertArrayEquals(expected, stream.toByteArray());
+        assertEquals(expected.length, streamed);
+        assertArrayEquals(expected, channelTarget.toByteArray());
+        assertEquals(expected.length, channeled);
+    }
+
+    @Test
+    void smallOutputBuffersGiveTheSameOutput() throws IOException {
+        byte[] xmp = "<x:xmpmeta xmlns:x='adobe:ns:meta/'/>".getBytes(StandardCharsets.UTF_8);
+        JxlMetadata metadata = new JxlMetadata(null, xmp);
+        JxlEncodeOptions options = JxlEncodeOptions.ofLossless();
+        byte[] expected = JxlEncoder.encode(TestImages.gradientRgba(), options, metadata);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        long written = JxlEncoder.encode(TestImages.gradientRgba(), options, metadata, OutputSink.of(out),
+                NativeEncoder.MIN_OUTPUT_CHUNK_SIZE + 5);
+
+        assertArrayEquals(expected, out.toByteArray());
+        assertEquals(expected.length, written);
+    }
+
+    @Test
+    void streamIsNeitherFlushedNorClosed() throws IOException {
+        RecordingStream out = new RecordingStream();
+
+        JxlEncoder.encode(TestImages.gradientRgba(), JxlEncodeOptions.defaults(), JxlMetadata.NONE, out);
+
+        assertTrue(out.size() > 0);
+        assertFalse(out.flushed);
+        assertFalse(out.closed);
+    }
+
+    @Test
+    void streamFailureIsPassedOnAndTheNextEncodeWorks() throws IOException {
+        OutputStream failing = new OutputStream() {
+            private int count;
+
+            @Override
+            public void write(int b) throws IOException {
+                if (++count > 100) {
+                    throw new IOException("disk full");
+                }
+            }
+        };
+
+        IOException e = assertThrows(IOException.class, () -> JxlEncoder.encode(TestImages.gradientRgba(),
+                JxlEncodeOptions.ofLossless(), JxlMetadata.NONE, failing));
+        assertTrue(e.getMessage().contains("disk full"), e.getMessage());
+
+        byte[] encoded = JxlEncoder.encode(TestImages.gradientRgba(), JxlEncodeOptions.ofLossless());
+        assertArrayEquals(TestImages.gradientRgbaPixels(), JxlDecoder.decode(encoded).pixels());
+    }
+
+    @Test
+    void rejectsANullSink() {
+        JxlImage image = TestImages.gradientRgba();
+        JxlEncodeOptions options = JxlEncodeOptions.defaults();
+        assertThrows(NullPointerException.class,
+                () -> JxlEncoder.encode(image, options, JxlMetadata.NONE, (OutputStream) null));
+        assertThrows(NullPointerException.class,
+                () -> JxlEncoder.encode(image, options, JxlMetadata.NONE, (WritableByteChannel) null));
+    }
+
+    /** Remembers whether it was flushed or closed. */
+    private static final class RecordingStream extends ByteArrayOutputStream {
+
+        boolean flushed;
+        boolean closed;
+
+        @Override
+        public void flush() {
+            flushed = true;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 
     /** Peak signal-to-noise ratio over the R, G and B samples of two RGBA buffers. */

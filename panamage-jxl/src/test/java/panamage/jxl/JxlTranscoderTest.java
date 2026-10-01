@@ -5,7 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -76,6 +80,75 @@ class JxlTranscoderTest {
         assertArrayEquals(JxlTranscoder.fromJpeg(jpeg), jxl);
         assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 331, JxlLimits.defaults()));
         assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1, JxlLimits.defaults()));
+    }
+
+    @Test
+    void streamAndChannelOutputEqualTheByteArrays() throws IOException {
+        byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
+        byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
+
+        ByteArrayOutputStream jxlStream = new ByteArrayOutputStream();
+        assertEquals(jxl.length, JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, jxlStream));
+        assertArrayEquals(jxl, jxlStream.toByteArray());
+
+        ByteArrayOutputStream jxlChannel = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(jxlChannel)) {
+            assertEquals(jxl.length, JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, channel));
+        }
+        assertArrayEquals(jxl, jxlChannel.toByteArray());
+
+        ByteArrayOutputStream jpegStream = new ByteArrayOutputStream();
+        assertEquals(jpeg.length, JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), jpegStream));
+        assertArrayEquals(jpeg, jpegStream.toByteArray());
+
+        ByteArrayOutputStream jpegChannel = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(jpegChannel)) {
+            assertEquals(jpeg.length, JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), channel));
+        }
+        assertArrayEquals(jpeg, jpegChannel.toByteArray());
+    }
+
+    @ParameterizedTest
+    @FieldSource("panamage.jxl.TestImages#PHOTO_JPEGS")
+    void sinksGetTheSameOutputWithSmallBuffers(String name) throws IOException {
+        byte[] jpeg = TestImages.resource(name);
+        byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
+
+        ByteArrayOutputStream jxlOut = new ByteArrayOutputStream();
+        JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, OutputSink.of(jxlOut), 997);
+        assertArrayEquals(jxl, jxlOut.toByteArray());
+
+        for (int chunkSize : new int[] {331, 1}) {
+            ByteArrayOutputStream jpegOut = new ByteArrayOutputStream();
+            long written = JxlTranscoder.toJpeg(jxl, chunkSize, JxlLimits.defaults(), OutputSink.of(jpegOut));
+            assertArrayEquals(jpeg, jpegOut.toByteArray(), "chunk size " + chunkSize);
+            assertEquals(jpeg.length, written, "chunk size " + chunkSize);
+        }
+    }
+
+    @Test
+    void jpegLimitAppliesWhenWritingToAStream() {
+        byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
+        byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
+        JxlLimits limits = JxlLimits.defaults().withMaxJpegBytes(jpeg.length - 1L);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, limits, out));
+        assertTrue(out.size() < jpeg.length, "written " + out.size());
+    }
+
+    @Test
+    void rejectsANullSink() {
+        byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
+        byte[] jxl = TestImages.gradientJxl();
+        assertThrows(NullPointerException.class,
+                () -> JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, (OutputStream) null));
+        assertThrows(NullPointerException.class,
+                () -> JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, (WritableByteChannel) null));
+        assertThrows(NullPointerException.class,
+                () -> JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), (OutputStream) null));
+        assertThrows(NullPointerException.class,
+                () -> JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), (WritableByteChannel) null));
     }
 
     @Test

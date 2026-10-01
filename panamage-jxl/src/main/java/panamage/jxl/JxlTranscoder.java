@@ -2,9 +2,11 @@ package panamage.jxl;
 
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.channels.WritableByteChannel;
 import java.util.Objects;
 
 import panamage.jxl.ffi.Jxl;
@@ -19,6 +21,9 @@ import panamage.jxl.ffi.Jxl;
  * <p>
  * The result of {@code fromJpeg} is a regular JPEG XL image that
  * {@link JxlDecoder} decodes to pixels as well.
+ * <p>
+ * The results are returned as byte arrays or written to an
+ * {@link OutputStream} or a {@link WritableByteChannel} as they are produced.
  * <p>
  * {@code toJpeg} rejects images beyond the pixel limit of {@link JxlLimits}
  * with a {@link JxlLimitException}, like {@link JxlDecoder}.
@@ -55,8 +60,55 @@ public final class JxlTranscoder {
         return fromJpeg(jpeg, effort, NativeEncoder.OUTPUT_CHUNK_SIZE);
     }
 
+    /**
+     * Converts a JPEG file losslessly to JPEG XL and writes the result to a
+     * stream, piece by piece, without holding the whole output in memory.
+     * <p>
+     * The stream is neither flushed nor closed. If an exception is thrown,
+     * part of the output may already have been written.
+     *
+     * @param jpeg   the JPEG file
+     * @param effort the encoder effort from 1 (fastest) to 10 (smallest output)
+     * @param out    the stream that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the stream fails
+     * @throws IllegalArgumentException if the effort is out of range
+     * @throws JxlException             if the JPEG cannot be transcoded
+     * @see #fromJpeg(byte[], int)
+     */
+    public static long fromJpeg(byte[] jpeg, int effort, OutputStream out) throws IOException {
+        return fromJpeg(jpeg, effort, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
+    }
+
+    /**
+     * Converts a JPEG file losslessly to JPEG XL and writes the result to a
+     * channel, piece by piece, without holding the whole output in memory or
+     * copying it to the Java heap.
+     * <p>
+     * The channel must be in blocking mode; it is not closed. If an exception
+     * is thrown, part of the output may already have been written.
+     *
+     * @param jpeg   the JPEG file
+     * @param effort the encoder effort from 1 (fastest) to 10 (smallest output)
+     * @param out    the channel that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the channel fails
+     * @throws IllegalArgumentException if the effort is out of range or the
+     *                                  channel is in non-blocking mode
+     * @throws JxlException             if the JPEG cannot be transcoded
+     * @see #fromJpeg(byte[], int)
+     */
+    public static long fromJpeg(byte[] jpeg, int effort, WritableByteChannel out) throws IOException {
+        return fromJpeg(jpeg, effort, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
+    }
+
     /** Like {@link #fromJpeg(byte[], int)}, with a given output buffer size. */
     static byte[] fromJpeg(byte[] jpeg, int effort, int chunkSize) {
+        return OutputSink.toBytes(sink -> fromJpeg(jpeg, effort, sink, chunkSize));
+    }
+
+    /** Transcodes to a sink, with a given output buffer size. */
+    static long fromJpeg(byte[] jpeg, int effort, OutputSink sink, int chunkSize) throws IOException {
         Objects.requireNonNull(jpeg, "jpeg");
         if (effort < JxlEncodeOptions.MIN_EFFORT || effort > JxlEncodeOptions.MAX_EFFORT) {
             throw new IllegalArgumentException("effort must be in [" + JxlEncodeOptions.MIN_EFFORT + ", "
@@ -71,7 +123,7 @@ public final class JxlTranscoder {
             MemorySegment input = arena.allocateFrom(JAVA_BYTE, jpeg);
             encoder.check(Jxl.JxlEncoderAddJPEGFrame(settings, input, input.byteSize()), "JxlEncoderAddJPEGFrame");
             Jxl.JxlEncoderCloseInput(handle);
-            return encoder.collectOutput(arena, chunkSize);
+            return encoder.writeOutput(arena, sink, chunkSize);
         }
     }
 
@@ -107,10 +159,68 @@ public final class JxlTranscoder {
     }
 
     /**
+     * Restores the original JPEG file from a JPEG XL file that was created by
+     * lossless JPEG transcoding and writes it to a stream, piece by piece,
+     * without holding the whole JPEG file in memory.
+     * <p>
+     * The stream is neither flushed nor closed. The image is checked against
+     * the pixel limit before anything is written; if an exception is thrown
+     * later, part of the JPEG file may already have been written.
+     *
+     * @param jxl    the JPEG XL file
+     * @param limits the limits; {@link JxlLimits#maxPixels()} and
+     *               {@link JxlLimits#maxJpegBytes()} apply
+     * @param out    the stream that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException       if writing to the stream fails
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
+     * @see #toJpeg(byte[], JxlLimits)
+     */
+    public static long toJpeg(byte[] jxl, JxlLimits limits, OutputStream out) throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    }
+
+    /**
+     * Restores the original JPEG file from a JPEG XL file that was created by
+     * lossless JPEG transcoding and writes it to a channel, piece by piece,
+     * without holding the whole JPEG file in memory or copying it to the Java
+     * heap.
+     * <p>
+     * The channel must be in blocking mode; it is not closed. The image is
+     * checked against the pixel limit before anything is written; if an
+     * exception is thrown later, part of the JPEG file may already have been
+     * written.
+     *
+     * @param jxl    the JPEG XL file
+     * @param limits the limits; {@link JxlLimits#maxPixels()} and
+     *               {@link JxlLimits#maxJpegBytes()} apply
+     * @param out    the channel that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the channel fails
+     * @throws IllegalArgumentException if the channel is in non-blocking mode
+     * @throws JxlLimitException        if the image or the JPEG file exceeds
+     *                                  the limits
+     * @throws JxlException             if the data is not valid JPEG XL or
+     *                                  contains no JPEG reconstruction data
+     * @see #toJpeg(byte[], JxlLimits)
+     */
+    public static long toJpeg(byte[] jxl, JxlLimits limits, WritableByteChannel out) throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    }
+
+    /**
      * Like {@link #toJpeg(byte[], JxlLimits)}, with a given output buffer size
      * (tests use a small size to exercise the multi-chunk path).
      */
     static byte[] toJpeg(byte[] jxl, int chunkSize, JxlLimits limits) {
+        return OutputSink.toBytes(sink -> toJpeg(jxl, chunkSize, limits, sink));
+    }
+
+    /** Restores the JPEG file to a sink, with a given output buffer size. */
+    static long toJpeg(byte[] jxl, int chunkSize, JxlLimits limits, OutputSink sink) throws IOException {
         Objects.requireNonNull(jxl, "jxl");
         Objects.requireNonNull(limits, "limits");
         if (chunkSize <= 0) {
@@ -119,17 +229,17 @@ public final class JxlTranscoder {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = arena.allocateFrom(JAVA_BYTE, jxl);
             JxlDecoder.checkFrames(input, limits, 1, false, arena);
-            return reconstruct(input, chunkSize, limits, arena);
+            return reconstruct(input, chunkSize, limits, sink, arena);
         }
     }
 
-    private static byte[] reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, Arena arena) {
+    private static long reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink,
+            Arena arena) throws IOException {
         try (NativeDecoder decoder = NativeDecoder.create()) {
             MemorySegment handle = decoder.handle();
             decoder.start(Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(), input);
 
             MemorySegment chunk = arena.allocate(chunkSize);
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
             boolean reconstructing = false;
             while (true) {
                 int status = Jxl.JxlDecoderProcessInput(handle);
@@ -138,18 +248,18 @@ public final class JxlTranscoder {
                     NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk, chunk.byteSize()),
                             "JxlDecoderSetJPEGBuffer");
                 } else if (status == Jxl.JXL_DEC_JPEG_NEED_MORE_OUTPUT()) {
-                    if (drainChunk(handle, chunk, out, limits) == 0) {
+                    if (drainChunk(handle, chunk, sink, limits) == 0) {
                         // libjxl writes some JPEG segments only as a whole, so a buffer
                         // that is too small never fills; grow it until it does.
-                        limits.checkJpeg(out.size() + chunk.byteSize() + 1L);
+                        limits.checkJpeg(sink.written() + chunk.byteSize() + 1L);
                         chunk = arena.allocate(Math.multiplyExact(chunk.byteSize(), 2L));
                     }
                     NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk, chunk.byteSize()),
                             "JxlDecoderSetJPEGBuffer");
                 } else if (reconstructing
                         && (status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS())) {
-                    drainChunk(handle, chunk, out, limits);
-                    return out.toByteArray();
+                    drainChunk(handle, chunk, sink, limits);
+                    return sink.written();
                 } else if (status == Jxl.JXL_DEC_NEED_IMAGE_OUT_BUFFER()
                         || status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS()) {
                     throw new JxlException("The JPEG XL data contains no JPEG reconstruction data");
@@ -161,17 +271,19 @@ public final class JxlTranscoder {
     }
 
     /**
-     * Releases the JPEG buffer and appends the bytes the decoder wrote to it.
+     * Releases the JPEG buffer and writes the bytes the decoder wrote to it to
+     * the sink.
      *
      * @return the number of bytes written
+     * @throws IOException       if the sink fails
      * @throws JxlLimitException if the JPEG grows beyond the JPEG limit
      */
-    private static long drainChunk(MemorySegment decoder, MemorySegment chunk, ByteArrayOutputStream out,
-            JxlLimits limits) {
+    private static long drainChunk(MemorySegment decoder, MemorySegment chunk, OutputSink sink, JxlLimits limits)
+            throws IOException {
         long unused = Jxl.JxlDecoderReleaseJPEGBuffer(decoder);
         long written = chunk.byteSize() - unused;
-        limits.checkJpeg(out.size() + written);
-        out.write(chunk.asSlice(0L, written).toArray(JAVA_BYTE), 0, (int) written);
+        limits.checkJpeg(sink.written() + written);
+        sink.write(chunk.asSlice(0L, written));
         return written;
     }
 }

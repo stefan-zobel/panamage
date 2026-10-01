@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -167,6 +168,28 @@ class JxlImageWriterTest {
         param.setCompressionType(JxlImageWriteParam.LOSSY);
         param.setCompressionQuality(quality);
         return param;
+    }
+
+    @Test
+    void writesAfterTheBytesAlreadyInTheStream() throws IOException {
+        BufferedImage source = new BufferedImage(5, 3, BufferedImage.TYPE_INT_RGB);
+        byte[] alone = write(source, lossless());
+        byte[] prefix = {1, 2, 3};
+
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jxl").next();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ImageOutputStream stream = ImageIO.createImageOutputStream(out)) {
+            stream.write(prefix);
+            writer.setOutput(stream);
+            writer.write(null, new IIOImage(source, null, null), lossless());
+        } finally {
+            writer.dispose();
+        }
+
+        byte[] written = out.toByteArray();
+        assertEquals(prefix.length + alone.length, written.length);
+        assertArrayEquals(prefix, Arrays.copyOf(written, prefix.length));
+        assertArrayEquals(alone, Arrays.copyOfRange(written, prefix.length, written.length));
     }
 
     static byte[] write(BufferedImage image, ImageWriteParam param) throws IOException {
