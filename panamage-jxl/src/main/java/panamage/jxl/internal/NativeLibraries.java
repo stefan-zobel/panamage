@@ -97,8 +97,10 @@ public final class NativeLibraries {
             if (bundled.isPresent()) {
                 return bundled.get();
             }
-            attempts.add("bundled: no " + JxlNativeBundle.class.getSimpleName() + " for " + Platform.current()
-                    + " on the class path or module path (add panamage-jxl-natives-" + Platform.current() + ")");
+            String platform = Platform.current();
+            attempts.add("bundled: no " + JxlNativeBundle.class.getSimpleName() + " for " + platform
+                    + " on the class path or module path"
+                    + (Platform.isMusl(platform) ? "" : " (add panamage-jxl-natives-" + platform + ")"));
         } catch (IllegalArgumentException | IOException | ServiceConfigurationError e) {
             attempts.add("bundled: " + e.getMessage());
         }
@@ -229,24 +231,39 @@ public final class NativeLibraries {
         for (String attempt : attempts) {
             message.append(System.lineSeparator()).append("  ").append(attempt);
         }
-        String osName = System.getProperty("os.name", "");
-        if (osName.startsWith("Windows")) {
-            message.append(System.lineSeparator()).append("  Note: libjxl needs the Microsoft Visual C++ runtime")
-                    .append(" (msvcp140.dll, vcruntime140.dll), which JDKs ship in their bin directory.");
-        } else if (osName.startsWith("Linux")) {
-            message.append(System.lineSeparator()).append("  Note: the bundled libraries need glibc ")
-                    .append(requiredGlibc()).append(" or newer")
-                    .append(" and libstdc++; musl-based systems such as Alpine Linux are not supported.");
+        String note = note(System.getProperty("os.name", ""), currentPlatform());
+        if (note != null) {
+            message.append(System.lineSeparator()).append("  Note: ").append(note);
         }
         return new UnsatisfiedLinkError(message.toString());
     }
 
-    /** The glibc version the bundled Linux libraries need. */
-    private static String requiredGlibc() {
+    /**
+     * Returns the hint for a failed load on the given operating system and
+     * platform (null if the platform is not supported), or null if there is
+     * none.
+     */
+    static String note(String osName, String platform) {
+        if (osName.startsWith("Windows")) {
+            return "libjxl needs the Microsoft Visual C++ runtime (msvcp140.dll, vcruntime140.dll),"
+                    + " which JDKs ship in their bin directory.";
+        } else if (platform != null && Platform.isMusl(platform)) {
+            return "this is a musl-based system such as Alpine Linux, for which no bundled libraries"
+                    + " are available yet; install libjxl " + LibjxlVersion.MAJOR + "." + LibjxlVersion.MINOR
+                    + " on the system or set " + LIBRARY_PATH_PROPERTY + " to a directory with libraries"
+                    + " built for musl.";
+        } else if (osName.startsWith("Linux")) {
+            return "the bundled libraries need glibc " + ("linux-aarch64".equals(platform) ? "2.28" : "2.29")
+                    + " or newer and libstdc++.";
+        }
+        return null;
+    }
+
+    private static String currentPlatform() {
         try {
-            return "linux-aarch64".equals(Platform.current()) ? "2.28" : "2.29";
+            return Platform.current();
         } catch (IllegalArgumentException e) {
-            return "2.29";
+            return null;
         }
     }
 }

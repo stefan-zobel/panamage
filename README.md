@@ -52,7 +52,9 @@ bundled; nothing needs to be installed.
   (for example Ubuntu 20.04, Debian 11, RHEL 9 or newer), Linux on aarch64
   with glibc 2.28 or newer (for example Ubuntu 20.04, Debian 10, RHEL 8,
   Amazon Linux 2023 or newer), or macOS 11 or newer on Apple silicon (arm64).
-  musl-based systems such as Alpine Linux are not supported yet.
+  musl-based systems such as Alpine Linux are recognized, but there are no
+  bundled libraries for them yet; libjxl 0.12 can be installed on the system
+  or put into the directory named by `panamage.jxl.library.path`.
 
 ## Getting started
 

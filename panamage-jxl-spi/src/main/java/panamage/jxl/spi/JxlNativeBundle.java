@@ -18,7 +18,10 @@ public interface JxlNativeBundle {
     /**
      * Returns the platform the libraries are built for, as
      * {@code <os>-<arch>}, for example {@code windows-x86_64},
-     * {@code linux-aarch64} or {@code macos-aarch64}.
+     * {@code linux-aarch64} or {@code macos-aarch64}. Libraries for Linux
+     * with the musl C library, such as Alpine Linux, use
+     * {@code linux-musl-<arch>}, for example {@code linux-musl-x86_64};
+     * {@code linux-<arch>} denotes Linux with glibc.
      *
      * @return the platform identifier
      */

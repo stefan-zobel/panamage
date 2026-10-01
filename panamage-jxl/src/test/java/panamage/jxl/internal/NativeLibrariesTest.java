@@ -1,6 +1,9 @@
 package panamage.jxl.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 
@@ -25,5 +28,22 @@ class NativeLibrariesTest {
     void defaultCacheRootWithoutUserName() {
         assertEquals(Path.of("tmp", "panamage-jxl-user"), NativeLibraries.defaultCacheRoot("tmp", ""));
         assertEquals(Path.of("tmp", "panamage-jxl-user"), NativeLibraries.defaultCacheRoot("tmp", null));
+    }
+
+    @Test
+    void noteNamesTheRequirementsOfThePlatform() {
+        assertTrue(NativeLibraries.note("Windows 11", "windows-x86_64").contains("Visual C++ runtime"));
+        assertTrue(NativeLibraries.note("Linux", "linux-x86_64").contains("glibc 2.29"));
+        assertTrue(NativeLibraries.note("Linux", "linux-aarch64").contains("glibc 2.28"));
+        assertTrue(NativeLibraries.note("Linux", null).contains("glibc 2.29"));
+        assertNull(NativeLibraries.note("Mac OS X", "macos-aarch64"));
+    }
+
+    @Test
+    void noteForMuslDoesNotAskForGlibc() {
+        String note = NativeLibraries.note("Linux", "linux-musl-x86_64");
+        assertTrue(note.contains("musl"), note);
+        assertTrue(note.contains(NativeLibraries.LIBRARY_PATH_PROPERTY), note);
+        assertFalse(note.contains("glibc"), note);
     }
 }
