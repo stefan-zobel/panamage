@@ -1,3 +1,7 @@
+[![Maven Central](https://img.shields.io/maven-central/v/net.sourceforge.streamsupport/panamage-jxl.svg)](https://central.sonatype.com/artifact/net.sourceforge.streamsupport/panamage-jxl)
+[![javadoc.io](https://javadoc.io/badge2/net.sourceforge.streamsupport/panamage-jxl/javadoc.svg)](https://javadoc.io/doc/net.sourceforge.streamsupport/panamage-jxl)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+
 # panamage
 
 JPEG XL for Java, based on [libjxl](https://github.com/libjxl/libjxl) and the
@@ -9,9 +13,8 @@ JPEG XL and back, reads and writes EXIF and XMP metadata, and plugs into
 `ImageIO.write(image, "jxl", ...)` without changes. The native libraries are
 bundled; nothing needs to be installed.
 
-> **Status:** 0.0.2, an early release for trying things out. The API may change.
-> panamage is not yet published on Maven Central; download it from the
-> [Releases](../../releases) page.
+> **Status:** 0.1.0, the first release on Maven Central. The API may still
+> change before 1.0.
 
 ## Features
 
@@ -53,8 +56,37 @@ bundled; nothing needs to be installed.
 
 ## Getting started
 
-Download `panamage-0.0.2-windows-x86_64.zip`,
-`panamage-0.0.2-linux-x86_64.tar.gz` or `panamage-0.0.2-macos-aarch64.tar.gz`
+panamage is on Maven Central. Add the Image I/O plugin (or only
+`panamage-jxl` for the decoder and encoder API) and the native libraries for
+each platform the application runs on:
+
+```xml
+<dependency>
+    <groupId>net.sourceforge.streamsupport</groupId>
+    <artifactId>panamage-jxl-imageio</artifactId>
+    <version>0.1.0</version>
+</dependency>
+<dependency>
+    <groupId>net.sourceforge.streamsupport</groupId>
+    <artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
+    <version>0.1.0</version>
+    <scope>runtime</scope>
+</dependency>
+```
+
+With Gradle:
+
+```kotlin
+implementation("net.sourceforge.streamsupport:panamage-jxl-imageio:0.1.0")
+runtimeOnly("net.sourceforge.streamsupport:panamage-jxl-natives-windows-x86_64:0.1.0")
+```
+
+The other native artifacts are `panamage-jxl-natives-linux-x86_64`,
+`panamage-jxl-natives-linux-aarch64` and `panamage-jxl-natives-macos-aarch64`.
+
+To try panamage without a build tool, download
+`panamage-0.1.0-windows-x86_64.zip`, `panamage-0.1.0-linux-x86_64.tar.gz`,
+`panamage-0.1.0-linux-aarch64.tar.gz` or `panamage-0.1.0-macos-aarch64.tar.gz`
 from the [Releases](../../releases) page and unpack it. It contains the JARs,
 a README and a small example program:
 
