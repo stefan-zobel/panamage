@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 from libjxl_source import (LIBJXL_VERSION, ORIGIN, build, check_loading, checkout, copy_library, copy_licenses,
-                           dynamic_entries, output_of, pack)
+                           dynamic_entries, output_of, pack, run)
 from tools_dir import PROJECT_DIR
 
 # Architecture -> machine in the ELF header.
@@ -105,17 +105,27 @@ def exported_symbols(library: Path) -> set[str]:
     return found
 
 
-def runtime_symbols() -> set[str]:
+def runtime_symbols(work: Path) -> set[str]:
     """The symbols the shared C++ runtime and libgcc of the build system
     export. Template code that a library instantiates itself, such as
-    std::vector members, is not among them."""
+    std::vector members, is not among them, and neither are the symbols that
+    the linker puts into every shared library, such as _init and _fini."""
     symbols = set()
     for name in ("libstdc++.so.6", "libgcc_s.so.1"):
         path = Path(output_of(["g++", f"-print-file-name={name}"]).strip())
         if not path.is_absolute() or not path.exists():
             raise SystemExit(f"{name} of the C++ compiler not found")
         symbols |= exported_symbols(path.resolve())
-    return symbols
+    return symbols - linker_symbols(work)
+
+
+def linker_symbols(work: Path) -> set[str]:
+    """The symbols an empty shared library exports, built by the same compiler."""
+    source = work / "empty.c"
+    library = work / "libempty.so"
+    source.write_text("", encoding="ascii")
+    run(["gcc", "-shared", "-o", str(library), str(source)])
+    return exported_symbols(library)
 
 
 def check(library: Path, arch: str, runtime: set[str]) -> None:
@@ -154,7 +164,7 @@ def collect(source: Path, build_dir: Path, install_dir: Path, staging: Path, arc
     licenses = staging / "licenses"
     lib.mkdir(parents=True)
     licenses.mkdir()
-    runtime = runtime_symbols()
+    runtime = runtime_symbols(staging.parent)
     for name in LIBRARIES:
         target = lib / name
         copy_library(install_dir / "lib" / name, target)
