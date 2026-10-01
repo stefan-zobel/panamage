@@ -12,6 +12,7 @@ on:
           - all
           - linux
           - linux-aarch64
+          - linux-musl
           - macos
           - windows
         default: all
@@ -19,12 +20,18 @@ on:
 permissions:
   contents: read
 
+env:
+  # eclipse-temurin 25.0.4.1_1 JDK on Alpine 3.21 (musl), multi-platform image index
+  ALPINE_JDK_IMAGE: eclipse-temurin:25.0.4.1_1-jdk-alpine-3.21@sha256:85d59a742f07999afc622094e494ba3c91a58af19c09c1f8d2cc5854a1d24c7a
+
 jobs:
   # A job-level condition cannot use the matrix, so the matrix is computed here.
   select:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
+      hosted: ${{ steps.select.outputs.hosted }}
+      musl: ${{ steps.select.outputs.musl }}
     steps:
       - uses: actions/setup-python@v7
         with:
@@ -42,9 +49,13 @@ jobs:
           include = [{"name": name, "os": os_} for name, os_ in runners.items() if chosen in ("all", name)]
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write("matrix=" + json.dumps({"include": include}) + "\n")
+              # An empty matrix is an error, so the build job is skipped instead.
+              out.write("hosted=" + json.dumps(bool(include)) + "\n")
+              out.write("musl=" + json.dumps(chosen in ("all", "linux-musl")) + "\n")
 
   build:
     needs: select
+    if: needs.select.outputs.hosted == 'true'
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -102,5 +113,61 @@ jobs:
         if: always()
         with:
           name: test-reports-${{ matrix.name }}
+          path: "*/target/surefire-reports/"
+          if-no-files-found: ignore
+
+  # Linux x86_64 with musl (Alpine): the tests run in a container with a JDK
+  # for Alpine, so the JVM itself uses musl and loads the musl libraries. A
+  # container job cannot run the actions in Alpine, so the build runs in
+  # docker run; the downloads are made on the runner.
+  linux-musl:
+    needs: select
+    if: needs.select.outputs.musl == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # fetch_tools.py needs 7-Zip for the Deflate64 archive of libjxl for Windows.
+      - name: Make sure 7-Zip is available
+        run: command -v 7z || command -v 7zz || sudo apt-get install -y 7zip
+
+      - uses: actions/cache@v6
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch_tools.py') }}
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository
+          key: maven-linux-musl-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-linux-musl-
+
+      - name: Download native libraries and test data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/fetch_tools.py --build-only
+
+      - name: Build and test on Alpine
+        run: >
+          docker run --rm --volume "$PWD:/work" --volume "$HOME/.m2:/root/.m2" --workdir /work
+          "$ALPINE_JDK_IMAGE" sh -c
+          'apk add --no-cache python3
+          && java -version
+          && python3 scripts/write_toolchains.py --jdk "$JAVA_HOME"
+          && ./mvnw -B verify'
+
+      # The container writes as root; the cache step must be able to read the repository.
+      - name: Hand the Maven repository to the runner user
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" ~/.m2 . || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-reports-linux-musl
           path: "*/target/surefire-reports/"
           if-no-files-found: ignore

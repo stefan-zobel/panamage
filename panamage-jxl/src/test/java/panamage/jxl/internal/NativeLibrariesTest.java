@@ -40,9 +40,16 @@ class NativeLibrariesTest {
     }
 
     @Test
-    void noteForMuslDoesNotAskForGlibc() {
+    void noteForMuslNamesTheMuslVersionInsteadOfGlibc() {
         String note = NativeLibraries.note("Linux", "linux-musl-x86_64");
-        assertTrue(note.contains("musl"), note);
+        assertTrue(note.contains("musl 1.2.4"), note);
+        assertFalse(note.contains("glibc"), note);
+    }
+
+    @Test
+    void noteForAPlatformWithoutBundleNamesTheAlternatives() {
+        String note = NativeLibraries.note("Linux", "linux-musl-aarch64");
+        assertTrue(note.contains("no bundled libraries for linux-musl-aarch64"), note);
         assertTrue(note.contains(NativeLibraries.LIBRARY_PATH_PROPERTY), note);
         assertFalse(note.contains("glibc"), note);
     }

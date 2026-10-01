@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+import java.util.Set;
 
 import panamage.jxl.ffi.LibjxlVersion;
 import panamage.jxl.spi.JxlNativeBundle;
@@ -48,6 +49,9 @@ public final class NativeLibraries {
 
     /** System property naming the directory to extract bundled libraries to. */
     public static final String CACHE_DIR_PROPERTY = "panamage.jxl.cache.dir";
+
+    /** Recognized platforms for which panamage has no natives artifact yet. */
+    private static final Set<String> UNBUNDLED_PLATFORMS = Set.of("linux-musl-aarch64");
 
     private record Loaded(SymbolLookup lookup, String source) {
     }
@@ -100,7 +104,7 @@ public final class NativeLibraries {
             String platform = Platform.current();
             attempts.add("bundled: no " + JxlNativeBundle.class.getSimpleName() + " for " + platform
                     + " on the class path or module path"
-                    + (Platform.isMusl(platform) ? "" : " (add panamage-jxl-natives-" + platform + ")"));
+                    + (UNBUNDLED_PLATFORMS.contains(platform) ? "" : " (add panamage-jxl-natives-" + platform + ")"));
         } catch (IllegalArgumentException | IOException | ServiceConfigurationError e) {
             attempts.add("bundled: " + e.getMessage());
         }
@@ -247,11 +251,13 @@ public final class NativeLibraries {
         if (osName.startsWith("Windows")) {
             return "libjxl needs the Microsoft Visual C++ runtime (msvcp140.dll, vcruntime140.dll),"
                     + " which JDKs ship in their bin directory.";
+        } else if (platform != null && UNBUNDLED_PLATFORMS.contains(platform)) {
+            return "there are no bundled libraries for " + platform + " yet; install libjxl "
+                    + LibjxlVersion.MAJOR + "." + LibjxlVersion.MINOR + " on the system or set "
+                    + LIBRARY_PATH_PROPERTY + " to a directory with libraries built for this platform.";
         } else if (platform != null && Platform.isMusl(platform)) {
-            return "this is a musl-based system such as Alpine Linux, for which no bundled libraries"
-                    + " are available yet; install libjxl " + LibjxlVersion.MAJOR + "." + LibjxlVersion.MINOR
-                    + " on the system or set " + LIBRARY_PATH_PROPERTY + " to a directory with libraries"
-                    + " built for musl.";
+            return "the bundled libraries for musl-based systems need musl 1.2.4 or newer"
+                    + " (for example Alpine Linux 3.18 or newer).";
         } else if (osName.startsWith("Linux")) {
             return "the bundled libraries need glibc " + ("linux-aarch64".equals(platform) ? "2.28" : "2.29")
                     + " or newer and libstdc++.";

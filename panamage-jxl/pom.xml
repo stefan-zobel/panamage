@@ -40,6 +40,11 @@
 		</dependency>
 		<dependency>
 			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-musl-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
 			<artifactId>panamage-jxl-natives-macos-aarch64</artifactId>
 			<scope>test</scope>
 		</dependency>

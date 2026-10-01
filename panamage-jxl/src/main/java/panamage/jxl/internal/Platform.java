@@ -2,6 +2,7 @@ package panamage.jxl.internal;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -76,7 +77,8 @@ final class Platform {
      * map cannot be read, glibc is assumed.
      */
     private static boolean runsOnMusl() {
-        try (Stream<String> lines = Files.lines(Path.of("/proc/self/maps"))) {
+        // ISO-8859-1 accepts every byte of a path name.
+        try (Stream<String> lines = Files.lines(Path.of("/proc/self/maps"), StandardCharsets.ISO_8859_1)) {
             return mapsMusl(lines);
         } catch (IOException | UncheckedIOException | SecurityException e) {
             return false;

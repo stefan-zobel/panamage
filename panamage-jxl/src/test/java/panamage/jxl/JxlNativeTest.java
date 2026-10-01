@@ -3,6 +3,8 @@ package panamage.jxl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -19,7 +21,7 @@ class JxlNativeTest {
 
     @Test
     @DisabledIfSystemProperty(named = "panamage.jxl.library.path", matches = ".+")
-    void loadsTheBundledLibrariesFromTheConfiguredCache() {
+    void loadsTheBundledLibrariesFromTheConfiguredCache() throws IOException {
         String osName = System.getProperty("os.name");
         String platform;
         String libjxlFile;
@@ -30,7 +32,11 @@ class JxlNativeTest {
             platform = "macos-aarch64";
             libjxlFile = "libjxl.0.12.dylib";
         } else {
-            platform = System.getProperty("os.arch").equals("aarch64") ? "linux-aarch64" : "linux-x86_64";
+            // The JVM of a musl-based system such as Alpine Linux runs with the musl loader.
+            boolean musl = Files.readString(Path.of("/proc/self/maps"), StandardCharsets.ISO_8859_1)
+                    .contains("/ld-musl-");
+            String arch = System.getProperty("os.arch").equals("aarch64") ? "aarch64" : "x86_64";
+            platform = (musl ? "linux-musl-" : "linux-") + arch;
             libjxlFile = "libjxl.so.0.12";
         }
         String prefix = "bundled " + platform + " at ";
