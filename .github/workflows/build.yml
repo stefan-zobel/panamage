@@ -13,6 +13,7 @@ on:
           - linux
           - linux-aarch64
           - linux-musl
+          - linux-musl-aarch64
           - macos
           - windows
         default: all
@@ -31,6 +32,7 @@ jobs:
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
       hosted: ${{ steps.select.outputs.hosted }}
+      musl_matrix: ${{ steps.select.outputs.musl_matrix }}
       musl: ${{ steps.select.outputs.musl }}
     steps:
       - uses: actions/setup-python@v7
@@ -45,13 +47,16 @@ jobs:
           import json, os
           runners = {"linux": "ubuntu-24.04", "linux-aarch64": "ubuntu-24.04-arm",
                      "macos": "macos-15", "windows": "windows-2025"}
+          musl_runners = {"linux-musl": "ubuntu-24.04", "linux-musl-aarch64": "ubuntu-24.04-arm"}
           chosen = os.environ["PLATFORMS"]
           include = [{"name": name, "os": os_} for name, os_ in runners.items() if chosen in ("all", name)]
+          musl = [{"name": name, "os": os_} for name, os_ in musl_runners.items() if chosen in ("all", name)]
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write("matrix=" + json.dumps({"include": include}) + "\n")
-              # An empty matrix is an error, so the build job is skipped instead.
+              out.write("musl_matrix=" + json.dumps({"include": musl}) + "\n")
+              # An empty matrix is an error, so the jobs are skipped instead.
               out.write("hosted=" + json.dumps(bool(include)) + "\n")
-              out.write("musl=" + json.dumps(chosen in ("all", "linux-musl")) + "\n")
+              out.write("musl=" + json.dumps(bool(musl)) + "\n")
 
   build:
     needs: select
@@ -116,14 +121,18 @@ jobs:
           path: "*/target/surefire-reports/"
           if-no-files-found: ignore
 
-  # Linux x86_64 with musl (Alpine): the tests run in a container with a JDK
-  # for Alpine, so the JVM itself uses musl and loads the musl libraries. A
+  # Linux with musl (Alpine): the tests run in a container with a JDK for
+  # Alpine, so the JVM itself uses musl and loads the musl libraries. A
   # container job cannot run the actions in Alpine, so the build runs in
   # docker run; the downloads are made on the runner.
   linux-musl:
     needs: select
     if: needs.select.outputs.musl == 'true'
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.musl_matrix) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -143,8 +152,8 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.m2/repository
-          key: maven-linux-musl-${{ hashFiles('**/pom.xml') }}
-          restore-keys: maven-linux-musl-
+          key: maven-${{ matrix.name }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ matrix.name }}-
 
       - name: Download native libraries and test data
         env:
@@ -168,6 +177,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: test-reports-linux-musl
+          name: test-reports-${{ matrix.name }}
           path: "*/target/surefire-reports/"
           if-no-files-found: ignore

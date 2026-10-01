@@ -77,7 +77,30 @@ files are named after their SONAMEs and stripped.
   (run 36873319774); the checked-in files are its content. `SHA256SUMS` lists
   the files (`sha256sum -c SHA256SUMS`).
 
-No module packs them yet.
+The module `panamage-jxl-natives-linux-musl-x86_64` packs them into its JAR.
+
+## libjxl-0.12.0-linux-musl-aarch64
+
+The libjxl 0.12.0 runtime libraries for Linux on aarch64 (64-bit ARM) with
+the musl C library 1.2.4 or newer, such as Alpine Linux 3.18 or newer, built
+like the libraries for x86_64: the C++ runtime and libgcc are linked
+statically with their symbols kept local, so the libraries need nothing but
+the musl C library. The files are named after their SONAMEs and stripped.
+
+- Source: the same libjxl commit and submodules as for macOS.
+- Built by the same workflow and script as for x86_64, on an arm64 runner in
+  the same `alpine:3.18.12` image (musl 1.2.4, GCC 12.2).
+- Checked by the script: AArch64 ELF files, SONAME equal to the file name,
+  `$ORIGIN` as the only RUNPATH, no dependencies besides these libraries and
+  `libc.musl-aarch64.so.1`, no glibc symbol versions, no exported symbols of
+  the C++ runtime or libgcc, and libjxl loads in the container and reports
+  version 0.12.0.
+- Workflow artifact `libjxl-0.12.0-linux-musl-aarch64.tar.gz`, SHA-256
+  `da140482afb3bb2765c7ba1d1b866059ac91d92b0997cd21fbf2d24a2b108fd6`
+  (run 36879483999); the checked-in files are its content. `SHA256SUMS` lists
+  the files (`sha256sum -c SHA256SUMS`).
+
+The module `panamage-jxl-natives-linux-musl-aarch64` packs them into its JAR.
 
 To update the libraries of a platform, run its workflow, download the artifact
 and replace the directory with the content of the archive.

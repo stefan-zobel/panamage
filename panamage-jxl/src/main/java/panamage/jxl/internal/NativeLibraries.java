@@ -51,7 +51,7 @@ public final class NativeLibraries {
     public static final String CACHE_DIR_PROPERTY = "panamage.jxl.cache.dir";
 
     /** Recognized platforms for which panamage has no natives artifact yet. */
-    private static final Set<String> UNBUNDLED_PLATFORMS = Set.of("linux-musl-aarch64");
+    private static final Set<String> UNBUNDLED_PLATFORMS = Set.of("macos-x86_64", "windows-aarch64");
 
     private record Loaded(SymbolLookup lookup, String source) {
     }
