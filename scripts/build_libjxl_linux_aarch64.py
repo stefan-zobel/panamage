@@ -31,11 +31,11 @@ import argparse
 import platform
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-from libjxl_source import LIBJXL_VERSION, build, checkout, copy_licenses, output_of, pack, run
+from libjxl_source import (LIBJXL_VERSION, ORIGIN, build, check_loading, checkout, copy_library, copy_licenses,
+                           dynamic_entries, output_of, pack)
 from tools_dir import PROJECT_DIR
 
 ARCHIVE_ROOT = f"libjxl-{LIBJXL_VERSION}-linux-aarch64"
@@ -73,17 +73,6 @@ MAXIMUM_VERSIONS = {
     "CXXABI": (1, 3, 11),
 }
 
-ORIGIN = "$ORIGIN"
-# JxlDecoderVersion() returns major * 1000000 + minor * 1000 + patch.
-EXPECTED_VERSION = sum(int(part) * factor for part, factor in zip(LIBJXL_VERSION.split("."), (1000000, 1000, 1)))
-
-
-def dynamic_entries(library: Path, tag: str) -> list[str]:
-    """The values of the entries of the dynamic section with the given tag, such as NEEDED."""
-    dynamic = output_of(["readelf", "--dynamic", "--wide", str(library)])
-    return re.findall(rf"\({tag}\)\s+[^\[]*\[([^\]]*)\]", dynamic)
-
-
 def check(library: Path) -> None:
     """Fails unless the library is a relocatable aarch64 library for glibc 2.28 that needs only our libraries."""
     name = library.name
@@ -115,39 +104,16 @@ def check(library: Path) -> None:
     print(f"Checked {name}: AArch64, SONAME, RUNPATH, dependencies and symbol versions OK", flush=True)
 
 
-def check_loading(lib: Path) -> None:
-    """Loads libjxl and libjxl_threads in a new process, which finds their
-    dependencies through the RUNPATH, and checks the version libjxl reports."""
-    script = (
-        "import ctypes, sys\n"
-        f"jxl = ctypes.CDLL({str(lib / 'libjxl.so.0.12')!r})\n"
-        f"ctypes.CDLL({str(lib / 'libjxl_threads.so.0.12')!r})\n"
-        "jxl.JxlDecoderVersion.restype = ctypes.c_uint32\n"
-        "print(jxl.JxlDecoderVersion())\n"
-    )
-    version = subprocess.run([sys.executable, "-c", script], check=True, capture_output=True,
-                             text=True).stdout.strip()
-    if version != str(EXPECTED_VERSION):
-        raise SystemExit(f"libjxl reports version {version}, expected {EXPECTED_VERSION}")
-    libc = platform.libc_ver()
-    print(f"Loaded the libraries with {' '.join(libc)}: libjxl version {version}", flush=True)
-
-
 def collect(source: Path, build_dir: Path, install_dir: Path, staging: Path) -> None:
     lib = staging / "lib"
     licenses = staging / "licenses"
     lib.mkdir(parents=True)
     licenses.mkdir()
     for name in LIBRARIES:
-        installed = install_dir / "lib" / name
-        if not installed.exists():
-            raise SystemExit(f"{installed} was not built")
-        # Store the real file under its SONAME, not the symbolic link.
         target = lib / name
-        shutil.copyfile(installed.resolve(), target)
-        run(["patchelf", "--set-rpath", ORIGIN, str(target)])
+        copy_library(install_dir / "lib" / name, target)
         check(target)
-    check_loading(lib)
+    check_loading(lib, " ".join(platform.libc_ver()))
     copy_licenses(source, build_dir, licenses)
 
 

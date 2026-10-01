@@ -1,6 +1,7 @@
 """Checkout, build and packing of libjxl from source, shared by the scripts
 that build the native libraries for platforms without libjxl binaries
-(build_libjxl_macos.py, build_libjxl_linux_aarch64.py).
+(build_libjxl_macos.py, build_libjxl_linux_aarch64.py,
+build_libjxl_linux_musl.py), plus the ELF helpers of the Linux scripts.
 
 The pinned release is built with only the runtime libraries: libjxl,
 libjxl_cms (with skcms) and libjxl_threads, plus the Brotli libraries they
@@ -10,8 +11,10 @@ need; Highway is linked statically.
 import hashlib
 import io
 import os
+import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 from pathlib import Path
@@ -21,6 +24,12 @@ LIBJXL_REPOSITORY = "https://github.com/libjxl/libjxl.git"
 LIBJXL_TAG = f"v{LIBJXL_VERSION}"
 LIBJXL_COMMIT = "a7a9c787341cf703dede03c2009fa460cae5e5df"
 SUBMODULES = ["third_party/brotli", "third_party/highway", "third_party/skcms"]
+
+# JxlDecoderVersion() returns major * 1000000 + minor * 1000 + patch.
+EXPECTED_VERSION = sum(int(part) * factor for part, factor in zip(LIBJXL_VERSION.split("."), (1000000, 1000, 1)))
+
+# The only run path of the Linux libraries, so they find each other in any directory.
+ORIGIN = "$ORIGIN"
 
 # Options for every platform; the platform scripts add their own.
 COMMON_CMAKE_OPTIONS = [
@@ -83,6 +92,39 @@ def build(source: Path, build_dir: Path, install_dir: Path, platform_options: li
          *COMMON_CMAKE_OPTIONS, *platform_options])
     run(["cmake", "--build", str(build_dir), "--config", "Release", "--parallel", str(os.cpu_count() or 4)])
     run(["cmake", "--install", str(build_dir), "--config", "Release", *(["--strip"] if strip else [])])
+
+
+def dynamic_entries(library: Path, tag: str) -> list[str]:
+    """The values of the entries of the dynamic section with the given tag, such as NEEDED."""
+    dynamic = output_of(["readelf", "--dynamic", "--wide", str(library)])
+    return re.findall(rf"\({tag}\)\s+[^\[]*\[([^\]]*)\]", dynamic)
+
+
+def copy_library(installed: Path, target: Path) -> None:
+    """Copies an installed Linux library under its SONAME, the real file and
+    not the symbolic link, and sets its RUNPATH to $ORIGIN."""
+    if not installed.exists():
+        raise SystemExit(f"{installed} was not built")
+    shutil.copyfile(installed.resolve(), target)
+    run(["patchelf", "--set-rpath", ORIGIN, str(target)])
+
+
+def check_loading(lib: Path, libc: str) -> None:
+    """Loads libjxl and libjxl_threads in a new process, which finds their
+    dependencies through the RUNPATH, and checks the version libjxl reports;
+    libc describes the C library for the log."""
+    script = (
+        "import ctypes, sys\n"
+        f"jxl = ctypes.CDLL({str(lib / 'libjxl.so.0.12')!r})\n"
+        f"ctypes.CDLL({str(lib / 'libjxl_threads.so.0.12')!r})\n"
+        "jxl.JxlDecoderVersion.restype = ctypes.c_uint32\n"
+        "print(jxl.JxlDecoderVersion())\n"
+    )
+    version = subprocess.run([sys.executable, "-c", script], check=True, capture_output=True,
+                             text=True).stdout.strip()
+    if version != str(EXPECTED_VERSION):
+        raise SystemExit(f"libjxl reports version {version}, expected {EXPECTED_VERSION}")
+    print(f"Loaded the libraries with {libc}: libjxl version {version}", flush=True)
 
 
 def copy_licenses(source: Path, build_dir: Path, licenses: Path) -> None:

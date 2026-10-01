@@ -1,0 +1,41 @@
+# Builds the libjxl shared libraries for musl-based Linux (Alpine) from source
+# (libjxl publishes no binaries for musl). The build runs in an Alpine 3.18
+# container, so the libraries need musl 1.2.4 (Alpine 3.18) or newer. The
+# archive is a workflow artifact; its content is checked in under natives/
+# (see natives/README.md).
+name: libjxl for Linux musl
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # alpine 3.18.12 (musl 1.2.4), multi-platform image index
+  IMAGE: alpine:3.18.12@sha256:de0eb0b3f2a47ba1eb89389859a9bd88b28e82f5826b6969ad604979713c2d4f
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A container job cannot run the actions in Alpine, so the build runs in docker run.
+      - name: Build and check libjxl
+        run: >
+          docker run --rm --volume "$PWD:/work" --workdir /work "$IMAGE" sh -c
+          "apk add --no-cache python3 git cmake make g++ linux-headers pkgconf patchelf binutils
+          && apk info -v | sort
+          && python3 scripts/build_libjxl_linux_musl.py --output dist/natives"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libjxl-linux-musl-${{ matrix.arch }}
+          path: dist/natives/
