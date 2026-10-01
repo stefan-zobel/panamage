@@ -1,8 +1,8 @@
 # Prebuilt native libraries
 
-libjxl publishes no binaries for macOS and for Linux on aarch64, so the
-libraries for these platforms are built from source by this project and
-checked in here. The other platforms use the binaries of the libjxl releases,
+libjxl publishes no binaries for macOS, for Linux on aarch64 and for
+musl-based Linux, so the libraries for these platforms are built from source
+by this project and checked in here. The other platforms use the binaries of the libjxl releases,
 downloaded by `scripts/fetch_tools.py`. The build scripts share the checkout,
 the common CMake options and the packing in `scripts/libjxl_source.py`.
 
@@ -50,6 +50,34 @@ named after their SONAMEs and stripped.
 - `SHA256SUMS` lists the files (`sha256sum -c SHA256SUMS`).
 
 The module `panamage-jxl-natives-linux-aarch64` packs them into its JAR.
+
+## libjxl-0.12.0-linux-musl-x86_64
+
+The libjxl 0.12.0 runtime libraries for Linux on x86_64 with the musl C
+library 1.2.4 or newer, such as Alpine Linux 3.18 or newer: libjxl,
+libjxl_cms (with skcms) and libjxl_threads, plus the Brotli libraries they
+need; Highway is linked statically. The C++ runtime and libgcc are linked
+statically as well, with their symbols kept local, so the libraries need
+nothing but the musl C library; minimal Alpine images have no libstdc++. The
+files are named after their SONAMEs and stripped.
+
+- Source: the same libjxl commit and submodules as for macOS.
+- Built by the workflow `.github/workflows/libjxl-linux-musl.yml` (manual
+  start) with `scripts/build_libjxl_linux_musl.py` in the container
+  `alpine:3.18.12` (musl 1.2.4, GCC 12.2), pinned by its digest in the
+  workflow; the CMake options are listed in the script and in
+  `scripts/libjxl_source.py`.
+- Checked by the script: x86-64 ELF files, SONAME equal to the file name,
+  `$ORIGIN` as the only RUNPATH, no dependencies besides these libraries and
+  `libc.musl-x86_64.so.1`, no glibc symbol versions, no exported symbols of
+  the C++ runtime or libgcc, and libjxl loads in the container and reports
+  version 0.12.0.
+- Workflow artifact `libjxl-0.12.0-linux-musl-x86_64.tar.gz`, SHA-256
+  `6a97aeb70ef09a588d7eb72f864e9e1f3bd74a42d37c933d7a0fa1b0af2a925d`
+  (run 36873319774); the checked-in files are its content. `SHA256SUMS` lists
+  the files (`sha256sum -c SHA256SUMS`).
+
+No module packs them yet.
 
 To update the libraries of a platform, run its workflow, download the artifact
 and replace the directory with the content of the archive.
