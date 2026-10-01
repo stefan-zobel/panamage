@@ -73,7 +73,7 @@ public final class JxlDecoder {
      */
     public static JxlImageInfo readInfo(byte[] data) {
         Objects.requireNonNull(data, "data");
-        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.create()) {
+        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
             decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING(),
                     arena.allocateFrom(JAVA_BYTE, data));
             MemorySegment handle = decoder.handle();
@@ -172,7 +172,7 @@ public final class JxlDecoder {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
-        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.create()) {
+        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
             MemorySegment handle = decoder.handle();
             NativeDecoder.check(Jxl.JxlDecoderSetDecompressBoxes(handle, Jxl.JXL_TRUE()),
                     "JxlDecoderSetDecompressBoxes");
@@ -302,6 +302,11 @@ public final class JxlDecoder {
      * <p>
      * The returned image is a {@link JxlImage.Uint8}, {@link JxlImage.Uint16}
      * or {@link JxlImage.Float32}, according to {@code type}.
+     * <p>
+     * While decoding, the pixels are held twice for a short time: in native
+     * memory, where libjxl writes them, and in the returned array. A
+     * 256-megapixel RGBA image needs 1 GiB for each copy with 8-bit samples
+     * and 4 GiB with floating point samples.
      *
      * @param data     the encoded image
      * @param channels the number of channels to produce: 1 (gray), 2 (gray and

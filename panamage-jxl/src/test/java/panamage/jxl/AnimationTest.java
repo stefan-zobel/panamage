@@ -10,6 +10,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -153,6 +154,29 @@ class AnimationTest {
         frames.close();
         assertThrows(IllegalStateException.class, frames::next);
         assertThrows(IllegalStateException.class, () -> frames.skip(1));
+    }
+
+    @Test
+    void closeFromAnotherThreadWaitsForTheRunningFrame() throws InterruptedException {
+        byte[] data = TestImages.animationJxl();
+        for (int run = 0; run < 50; run++) {
+            JxlFrameDecoder frames = JxlFrameDecoder.open(data, 4, JxlSampleType.UINT8);
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread reader = Thread.ofPlatform().start(() -> {
+                try {
+                    while (frames.next() != null) {
+                        // Decode until the end or until the decoder is closed.
+                    }
+                } catch (IllegalStateException e) {
+                    // Closed by the other thread between two frames.
+                } catch (Throwable t) {
+                    failure.set(t);
+                }
+            });
+            frames.close();
+            reader.join();
+            assertNull(failure.get());
+        }
     }
 
     @Test

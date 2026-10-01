@@ -175,6 +175,8 @@ bound, so panamage checks the size first and throws a `JxlLimitException`
   applies to all frames together; `JxlFrameDecoder` applies it to each frame.
 - **Metadata:** by default at most 16 MiB for each EXIF or XMP box after
   decompression.
+- **JPEG reconstruction:** by default at most 1 GiB for the JPEG file that
+  `JxlTranscoder.toJpeg` restores.
 
 ```java
 JxlLimits limits = JxlLimits.defaults().withMaxPixels(50_000_000);
@@ -183,10 +185,13 @@ JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8, limits);
 ```
 
 The defaults can be changed with the system properties
-`panamage.jxl.max.pixels` and `panamage.jxl.max.metadata.bytes`;
-`JxlLimits.unlimited()` turns the checks off for trusted input.
+`panamage.jxl.max.pixels`, `panamage.jxl.max.metadata.bytes` and
+`panamage.jxl.max.jpeg.bytes`; `JxlLimits.unlimited()` turns the checks off
+for trusted input.
 `JxlDecoder.readInfo` is not limited and reports the size without allocating
-the pixels.
+the pixels. While an image is decoded, its pixels are held twice for a short
+time, in native memory and in the Java array, so a 256-megapixel RGBA image
+needs about 2 GiB with 8-bit samples.
 
 The limits bound what libjxl reports through its API. libjxl does not report
 the size of reference frames, which only serve as a source for other frames,
@@ -202,8 +207,15 @@ The native libraries are loaded on first use from the first of these sources:
    (if set, no other source is tried);
 2. the platform JAR (`panamage-jxl-natives-<platform>`) on the class path or
    module path; its libraries are extracted to the directory named by
-   `panamage.jxl.cache.dir`, by default `panamage-jxl` in `java.io.tmpdir`;
+   `panamage.jxl.cache.dir`, by default `panamage-jxl-<user>` in
+   `java.io.tmpdir`;
 3. libjxl installed on the system.
+
+On Linux and macOS, the default cache directory must belong to the current
+user and must not be writable by others, so that no other user can replace a
+library before it is loaded; otherwise a new private temporary directory is
+used instead. A directory set with `panamage.jxl.cache.dir` is used as it is
+and should be private to the user, too.
 
 The loaded library must have the libjxl version the bindings were generated
 for (0.12.x). `JxlNative.librarySource()` tells where the library came from.

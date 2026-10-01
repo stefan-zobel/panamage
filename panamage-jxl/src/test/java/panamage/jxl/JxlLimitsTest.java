@@ -16,47 +16,68 @@ class JxlLimitsTest {
         assertThrows(IllegalArgumentException.class, () -> new JxlLimits(0, 1));
         assertThrows(IllegalArgumentException.class, () -> new JxlLimits(1, 0));
         assertThrows(IllegalArgumentException.class, () -> new JxlLimits(-1, 1));
+        assertThrows(IllegalArgumentException.class, () -> new JxlLimits(1, 1, 0));
         assertThrows(IllegalArgumentException.class, () -> JxlLimits.defaults().withMaxPixels(0));
         assertThrows(IllegalArgumentException.class, () -> JxlLimits.defaults().withMaxMetadataBytes(-5));
+        assertThrows(IllegalArgumentException.class, () -> JxlLimits.defaults().withMaxJpegBytes(-1));
+    }
+
+    @Test
+    void theTwoLimitConstructorUsesTheDefaultJpegLimit() {
+        assertEquals(new JxlLimits(10, 20, JxlLimits.DEFAULT_MAX_JPEG_BYTES), new JxlLimits(10, 20));
     }
 
     @Test
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void defaultsUseTheConstantsWithoutSystemProperties() {
-        withProperties(null, null, () -> {
+        withProperties(null, null, null, () -> {
             JxlLimits limits = JxlLimits.defaults();
             assertEquals(268_435_456L, limits.maxPixels());
             assertEquals(16L * 1024 * 1024, limits.maxMetadataBytes());
+            assertEquals(1024L * 1024 * 1024, limits.maxJpegBytes());
         });
     }
 
     @Test
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void defaultsCanBeSetWithSystemProperties() {
-        withProperties("1000", " 2048 ", () -> {
-            assertEquals(new JxlLimits(1000, 2048), JxlLimits.defaults());
+        withProperties("1000", " 2048 ", "4096", () -> {
+            assertEquals(new JxlLimits(1000, 2048, 4096), JxlLimits.defaults());
         });
     }
 
     @Test
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void rejectsInvalidSystemProperties() {
-        withProperties("many", null, () -> {
+        withProperties("many", null, null, () -> {
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class, JxlLimits::defaults);
             assertTrue(e.getMessage().contains(JxlLimits.MAX_PIXELS_PROPERTY), e.getMessage());
         });
-        withProperties(null, "0", () -> {
+        withProperties(null, "0", null, () -> {
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class, JxlLimits::defaults);
             assertTrue(e.getMessage().contains(JxlLimits.MAX_METADATA_BYTES_PROPERTY), e.getMessage());
+        });
+        withProperties(null, null, "-1", () -> {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, JxlLimits::defaults);
+            assertTrue(e.getMessage().contains(JxlLimits.MAX_JPEG_BYTES_PROPERTY), e.getMessage());
         });
     }
 
     @Test
     void copiesReplaceOneLimit() {
-        JxlLimits limits = new JxlLimits(10, 20);
-        assertEquals(new JxlLimits(30, 20), limits.withMaxPixels(30));
-        assertEquals(new JxlLimits(10, 40), limits.withMaxMetadataBytes(40));
-        assertEquals(new JxlLimits(Long.MAX_VALUE, Long.MAX_VALUE), JxlLimits.unlimited());
+        JxlLimits limits = new JxlLimits(10, 20, 30);
+        assertEquals(new JxlLimits(40, 20, 30), limits.withMaxPixels(40));
+        assertEquals(new JxlLimits(10, 40, 30), limits.withMaxMetadataBytes(40));
+        assertEquals(new JxlLimits(10, 20, 40), limits.withMaxJpegBytes(40));
+        assertEquals(new JxlLimits(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE), JxlLimits.unlimited());
+    }
+
+    @Test
+    void checksTheJpegSize() {
+        JxlLimits limits = JxlLimits.defaults().withMaxJpegBytes(100);
+        assertDoesNotThrow(() -> limits.checkJpeg(100));
+        JxlLimitException e = assertThrows(JxlLimitException.class, () -> limits.checkJpeg(101));
+        assertEquals("Reconstructed JPEG exceeds the limit of 100 bytes", e.getMessage());
     }
 
     @Test
@@ -109,16 +130,20 @@ class JxlLimitsTest {
         assertDoesNotThrow(() -> JxlLimits.unlimited().checkAnimation(1000, 1L << 20, 1L << 20, 4));
     }
 
-    private static void withProperties(String maxPixels, String maxMetadataBytes, Runnable action) {
+    private static void withProperties(String maxPixels, String maxMetadataBytes, String maxJpegBytes,
+            Runnable action) {
         String oldPixels = System.getProperty(JxlLimits.MAX_PIXELS_PROPERTY);
         String oldMetadata = System.getProperty(JxlLimits.MAX_METADATA_BYTES_PROPERTY);
+        String oldJpeg = System.getProperty(JxlLimits.MAX_JPEG_BYTES_PROPERTY);
         try {
             set(JxlLimits.MAX_PIXELS_PROPERTY, maxPixels);
             set(JxlLimits.MAX_METADATA_BYTES_PROPERTY, maxMetadataBytes);
+            set(JxlLimits.MAX_JPEG_BYTES_PROPERTY, maxJpegBytes);
             action.run();
         } finally {
             set(JxlLimits.MAX_PIXELS_PROPERTY, oldPixels);
             set(JxlLimits.MAX_METADATA_BYTES_PROPERTY, oldMetadata);
+            set(JxlLimits.MAX_JPEG_BYTES_PROPERTY, oldJpeg);
         }
     }
 

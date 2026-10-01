@@ -2,7 +2,7 @@ package panamage.jxl;
 
 /**
  * Limits that protect decoding against decompression bombs: small files that
- * declare huge images or expand to huge metadata.
+ * declare huge images or expand to huge metadata or JPEG files.
  * <p>
  * A JPEG XL file of a few hundred bytes can declare an image of a billion
  * pixels, which libjxl would allocate in native memory. Native memory is not
@@ -19,11 +19,13 @@ package panamage.jxl;
  * animation at once, so there the limit applies to all frames together;
  * {@link JxlFrameDecoder} holds one frame at a time and applies it to each
  * frame. The metadata limit applies to each EXIF or XMP box after
- * decompression.
+ * decompression. The JPEG limit applies to the JPEG file that
+ * {@link JxlTranscoder#toJpeg} reconstructs.
  * <p>
  * The methods without a {@code JxlLimits} parameter use {@link #defaults()},
  * which can be configured with the system properties
- * {@value #MAX_PIXELS_PROPERTY} and {@value #MAX_METADATA_BYTES_PROPERTY}.
+ * {@value #MAX_PIXELS_PROPERTY}, {@value #MAX_METADATA_BYTES_PROPERTY} and
+ * {@value #MAX_JPEG_BYTES_PROPERTY}.
  * {@snippet :
  * JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8,
  *         JxlLimits.defaults().withMaxPixels(50_000_000));
@@ -33,8 +35,10 @@ package panamage.jxl;
  *                         of its layers, counted as described above
  * @param maxMetadataBytes the largest size of an EXIF or XMP box after
  *                         decompression, in bytes
+ * @param maxJpegBytes     the largest size of a reconstructed JPEG file, in
+ *                         bytes
  */
-public record JxlLimits(long maxPixels, long maxMetadataBytes) {
+public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes) {
 
     /** The default pixel limit, 2^28 pixels (256 megapixels, e.g. 16384 x 16384). */
     public static final long DEFAULT_MAX_PIXELS = 1L << 28;
@@ -42,11 +46,20 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
     /** The default metadata limit, 16 MiB per box. */
     public static final long DEFAULT_MAX_METADATA_BYTES = 16L << 20;
 
+    /**
+     * The default JPEG limit, 1 GiB, as large as an 8-bit RGBA image of
+     * {@link #DEFAULT_MAX_PIXELS} pixels.
+     */
+    public static final long DEFAULT_MAX_JPEG_BYTES = 1L << 30;
+
     /** System property that overrides {@link #DEFAULT_MAX_PIXELS} in {@link #defaults()}. */
     public static final String MAX_PIXELS_PROPERTY = "panamage.jxl.max.pixels";
 
     /** System property that overrides {@link #DEFAULT_MAX_METADATA_BYTES} in {@link #defaults()}. */
     public static final String MAX_METADATA_BYTES_PROPERTY = "panamage.jxl.max.metadata.bytes";
+
+    /** System property that overrides {@link #DEFAULT_MAX_JPEG_BYTES} in {@link #defaults()}. */
+    public static final String MAX_JPEG_BYTES_PROPERTY = "panamage.jxl.max.jpeg.bytes";
 
     /** The number of channels that count as one pixel. */
     private static final int CHANNELS_PER_PIXEL = 4;
@@ -63,12 +76,28 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
         if (maxMetadataBytes <= 0) {
             throw new IllegalArgumentException("maxMetadataBytes must be positive: " + maxMetadataBytes);
         }
+        if (maxJpegBytes <= 0) {
+            throw new IllegalArgumentException("maxJpegBytes must be positive: " + maxJpegBytes);
+        }
     }
 
     /**
-     * Returns the default limits: {@link #DEFAULT_MAX_PIXELS} and
-     * {@link #DEFAULT_MAX_METADATA_BYTES}, unless the system properties
-     * {@value #MAX_PIXELS_PROPERTY} or {@value #MAX_METADATA_BYTES_PROPERTY}
+     * Creates limits with the given pixel and metadata limits and
+     * {@link #DEFAULT_MAX_JPEG_BYTES}.
+     *
+     * @param maxPixels        the pixel limit
+     * @param maxMetadataBytes the metadata limit in bytes
+     * @throws IllegalArgumentException if a limit is not positive
+     */
+    public JxlLimits(long maxPixels, long maxMetadataBytes) {
+        this(maxPixels, maxMetadataBytes, DEFAULT_MAX_JPEG_BYTES);
+    }
+
+    /**
+     * Returns the default limits: {@link #DEFAULT_MAX_PIXELS},
+     * {@link #DEFAULT_MAX_METADATA_BYTES} and {@link #DEFAULT_MAX_JPEG_BYTES},
+     * unless the system properties {@value #MAX_PIXELS_PROPERTY},
+     * {@value #MAX_METADATA_BYTES_PROPERTY} or {@value #MAX_JPEG_BYTES_PROPERTY}
      * set other values. The properties are read on every call.
      *
      * @return the default limits
@@ -77,7 +106,8 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
      */
     public static JxlLimits defaults() {
         return new JxlLimits(property(MAX_PIXELS_PROPERTY, DEFAULT_MAX_PIXELS),
-                property(MAX_METADATA_BYTES_PROPERTY, DEFAULT_MAX_METADATA_BYTES));
+                property(MAX_METADATA_BYTES_PROPERTY, DEFAULT_MAX_METADATA_BYTES),
+                property(MAX_JPEG_BYTES_PROPERTY, DEFAULT_MAX_JPEG_BYTES));
     }
 
     /**
@@ -87,7 +117,7 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
      * @return limits without restrictions
      */
     public static JxlLimits unlimited() {
-        return new JxlLimits(Long.MAX_VALUE, Long.MAX_VALUE);
+        return new JxlLimits(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE);
     }
 
     /**
@@ -98,7 +128,7 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
      * @throws IllegalArgumentException if the limit is not positive
      */
     public JxlLimits withMaxPixels(long maxPixels) {
-        return new JxlLimits(maxPixels, maxMetadataBytes);
+        return new JxlLimits(maxPixels, maxMetadataBytes, maxJpegBytes);
     }
 
     /**
@@ -109,7 +139,18 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
      * @throws IllegalArgumentException if the limit is not positive
      */
     public JxlLimits withMaxMetadataBytes(long maxMetadataBytes) {
-        return new JxlLimits(maxPixels, maxMetadataBytes);
+        return new JxlLimits(maxPixels, maxMetadataBytes, maxJpegBytes);
+    }
+
+    /**
+     * Returns a copy of these limits with a different JPEG limit.
+     *
+     * @param maxJpegBytes the new JPEG limit in bytes
+     * @return the new limits
+     * @throws IllegalArgumentException if the limit is not positive
+     */
+    public JxlLimits withMaxJpegBytes(long maxJpegBytes) {
+        return new JxlLimits(maxPixels, maxMetadataBytes, maxJpegBytes);
     }
 
     /**
@@ -173,6 +214,16 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes) {
         if (size > maxMetadataBytes) {
             throw new JxlLimitException("Metadata box '" + boxType + "' exceeds the limit of " + maxMetadataBytes
                     + " bytes");
+        }
+    }
+
+    /**
+     * Throws a {@link JxlLimitException} if a reconstructed JPEG file of the
+     * given size exceeds the JPEG limit.
+     */
+    void checkJpeg(long size) {
+        if (size > maxJpegBytes) {
+            throw new JxlLimitException("Reconstructed JPEG exceeds the limit of " + maxJpegBytes + " bytes");
         }
     }
 

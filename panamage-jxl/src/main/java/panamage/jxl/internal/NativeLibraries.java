@@ -29,8 +29,11 @@ import panamage.jxl.spi.JxlNativeBundle;
  *     source that is tried, so a misconfiguration is not hidden.</li>
  * <li>A {@link JxlNativeBundle} for the current platform on the class path or
  *     module path, extracted to the directory named by
- *     {@value #CACHE_DIR_PROPERTY} (default: {@code panamage-jxl} in
- *     {@code java.io.tmpdir}).</li>
+ *     {@value #CACHE_DIR_PROPERTY} (default: {@code panamage-jxl-<user>} in
+ *     {@code java.io.tmpdir}). On POSIX file systems, the default directory
+ *     must be private to the current user, otherwise a new temporary
+ *     directory is used instead; a configured directory is used as it
+ *     is.</li>
  * <li>libjxl installed on the system, found by the operating system's
  *     library search.</li>
  * </ol>
@@ -131,7 +134,12 @@ public final class NativeLibraries {
             if (!bundle.platform().equals(platform)) {
                 continue;
             }
-            List<Path> paths = BundleExtractor.extract(bundle, cacheRoot());
+            String configured = System.getProperty(CACHE_DIR_PROPERTY, "");
+            // Only the default directory has a name that other users can predict.
+            List<Path> paths = configured.isBlank()
+                    ? BundleExtractor.extractPrivately(bundle,
+                            defaultCacheRoot(System.getProperty("java.io.tmpdir"), System.getProperty("user.name")))
+                    : BundleExtractor.extractUnchecked(bundle, Path.of(configured));
             return Optional.of(new Loaded(loadAll(paths),
                     "bundled " + platform + " at " + paths.getFirst().getParent()));
         }
@@ -204,12 +212,15 @@ public final class NativeLibraries {
         }
     }
 
-    private static Path cacheRoot() {
-        String configured = System.getProperty(CACHE_DIR_PROPERTY, "");
-        if (!configured.isBlank()) {
-            return Path.of(configured);
-        }
-        return Path.of(System.getProperty("java.io.tmpdir"), "panamage-jxl");
+    /**
+     * Returns the default cache directory: {@code panamage-jxl-<user>} in the
+     * temporary directory, with the characters of the user name other than
+     * letters, digits, '.', '_' and '-' replaced by '_', so that users do not
+     * share a directory.
+     */
+    static Path defaultCacheRoot(String temporaryDirectory, String userName) {
+        String user = userName == null ? "" : userName.replaceAll("[^A-Za-z0-9._-]", "_");
+        return Path.of(temporaryDirectory, "panamage-jxl-" + (user.isEmpty() ? "user" : user));
     }
 
     private static UnsatisfiedLinkError failure(List<String> attempts) {
@@ -223,9 +234,19 @@ public final class NativeLibraries {
             message.append(System.lineSeparator()).append("  Note: libjxl needs the Microsoft Visual C++ runtime")
                     .append(" (msvcp140.dll, vcruntime140.dll), which JDKs ship in their bin directory.");
         } else if (osName.startsWith("Linux")) {
-            message.append(System.lineSeparator()).append("  Note: the bundled libraries need glibc 2.29 or newer")
+            message.append(System.lineSeparator()).append("  Note: the bundled libraries need glibc ")
+                    .append(requiredGlibc()).append(" or newer")
                     .append(" and libstdc++; musl-based systems such as Alpine Linux are not supported.");
         }
         return new UnsatisfiedLinkError(message.toString());
+    }
+
+    /** The glibc version the bundled Linux libraries need. */
+    private static String requiredGlibc() {
+        try {
+            return "linux-aarch64".equals(Platform.current()) ? "2.28" : "2.29";
+        } catch (IllegalArgumentException e) {
+            return "2.29";
+        }
     }
 }

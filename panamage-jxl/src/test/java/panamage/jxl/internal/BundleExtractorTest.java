@@ -2,9 +2,12 @@ package panamage.jxl.internal;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -13,6 +16,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,6 +120,77 @@ class BundleExtractorTest {
         try (var files = Files.list(directory)) {
             assertEquals(List.of("a.dll", "b.dll"), files.map(p -> p.getFileName().toString()).sorted().toList());
         }
+    }
+
+    @Test
+    void createsDirectoriesOnlyTheOwnerCanAccess() throws IOException {
+        assumeTrue(PrivateDirectory.isPosix(cache), "POSIX file system");
+        Path root = cache.resolve("root");
+
+        Path directory = BundleExtractor.extract(FakeBundle.of("a.so", "x"), root).getFirst().getParent();
+
+        assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(root)));
+        assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(directory)));
+    }
+
+    @Test
+    void rejectsADirectoryOthersCanWrite() throws IOException {
+        assumeTrue(PrivateDirectory.isPosix(cache), "POSIX file system");
+        FakeBundle bundle = FakeBundle.of("a.so", "x");
+        Path directory = BundleExtractor.extract(bundle, cache).getFirst().getParent();
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwxrwxrwx"));
+
+        assertThrows(PrivateDirectory.UnsafeDirectoryException.class, () -> BundleExtractor.extract(bundle, cache));
+    }
+
+    @Test
+    void rejectsASymbolicLink() throws IOException {
+        assumeTrue(PrivateDirectory.isPosix(cache), "POSIX file system");
+        Path target = Files.createDirectory(cache.resolve("target"));
+        Path link = Files.createSymbolicLink(cache.resolve("root"), target);
+
+        assertThrows(PrivateDirectory.UnsafeDirectoryException.class,
+                () -> BundleExtractor.extract(FakeBundle.of("a.so", "x"), link));
+    }
+
+    @Test
+    void rejectsADirectoryOfAnotherUser() throws IOException {
+        assumeTrue(PrivateDirectory.isPosix(cache), "POSIX file system");
+        UserPrincipal root = cache.getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName("root");
+        assumeFalse(root.equals(PrivateDirectory.currentUser()), "not running as root");
+
+        assertThrows(PrivateDirectory.UnsafeDirectoryException.class,
+                () -> PrivateDirectory.create(cache.resolve("root"), root));
+    }
+
+    @Test
+    void fallsBackToATemporaryDirectory() throws IOException {
+        assumeTrue(PrivateDirectory.isPosix(cache), "POSIX file system");
+        FakeBundle bundle = FakeBundle.of("a.so", "x");
+        Path root = Files.createDirectory(cache.resolve("shared"));
+        Files.setPosixFilePermissions(root, PosixFilePermissions.fromString("rwxrwxrwx"));
+
+        assertThrows(PrivateDirectory.UnsafeDirectoryException.class, () -> BundleExtractor.extract(bundle, root));
+        Path file = BundleExtractor.extractPrivately(bundle, root).getFirst();
+
+        assertFalse(file.startsWith(root), file.toString());
+        assertEquals("x", Files.readString(file));
+        assertEquals("rwx------",
+                PosixFilePermissions.toString(Files.getPosixFilePermissions(file.getParent().getParent())));
+    }
+
+    @Test
+    void usesAChosenDirectoryAsItIs() throws IOException {
+        assumeTrue(PrivateDirectory.isPosix(cache), "POSIX file system");
+        FakeBundle bundle = FakeBundle.of("a.so", "x");
+        Path root = Files.createDirectory(cache.resolve("chosen"));
+        Files.setPosixFilePermissions(root, PosixFilePermissions.fromString("rwxrwxrwx"));
+
+        Path file = BundleExtractor.extractUnchecked(bundle, root).getFirst();
+
+        assertEquals(root, file.getParent().getParent());
+        assertEquals("x", Files.readString(file));
+        assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file.getParent())));
     }
 
     @Test

@@ -81,7 +81,8 @@ public final class JxlTranscoder {
      *
      * @param jxl the JPEG XL file
      * @return the original JPEG file
-     * @throws JxlLimitException if the image exceeds the default limits
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           default limits
      * @throws JxlException      if the data is not valid JPEG XL or contains
      *                           no JPEG reconstruction data
      */
@@ -93,9 +94,11 @@ public final class JxlTranscoder {
      * Like {@link #toJpeg(byte[])}, with the given limits.
      *
      * @param jxl    the JPEG XL file
-     * @param limits the limits; only {@link JxlLimits#maxPixels()} applies
+     * @param limits the limits; {@link JxlLimits#maxPixels()} and
+     *               {@link JxlLimits#maxJpegBytes()} apply
      * @return the original JPEG file
-     * @throws JxlLimitException if the image exceeds the limits
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           limits
      * @throws JxlException      if the data is not valid JPEG XL or contains
      *                           no JPEG reconstruction data
      */
@@ -116,11 +119,11 @@ public final class JxlTranscoder {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = arena.allocateFrom(JAVA_BYTE, jxl);
             JxlDecoder.checkFrames(input, limits, 1, false, arena);
-            return reconstruct(input, chunkSize, arena);
+            return reconstruct(input, chunkSize, limits, arena);
         }
     }
 
-    private static byte[] reconstruct(MemorySegment input, int chunkSize, Arena arena) {
+    private static byte[] reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, Arena arena) {
         try (NativeDecoder decoder = NativeDecoder.create()) {
             MemorySegment handle = decoder.handle();
             decoder.start(Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(), input);
@@ -135,16 +138,17 @@ public final class JxlTranscoder {
                     NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk, chunk.byteSize()),
                             "JxlDecoderSetJPEGBuffer");
                 } else if (status == Jxl.JXL_DEC_JPEG_NEED_MORE_OUTPUT()) {
-                    if (drainChunk(handle, chunk, out) == 0) {
+                    if (drainChunk(handle, chunk, out, limits) == 0) {
                         // libjxl writes some JPEG segments only as a whole, so a buffer
                         // that is too small never fills; grow it until it does.
+                        limits.checkJpeg(out.size() + chunk.byteSize() + 1L);
                         chunk = arena.allocate(Math.multiplyExact(chunk.byteSize(), 2L));
                     }
                     NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk, chunk.byteSize()),
                             "JxlDecoderSetJPEGBuffer");
                 } else if (reconstructing
                         && (status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS())) {
-                    drainChunk(handle, chunk, out);
+                    drainChunk(handle, chunk, out, limits);
                     return out.toByteArray();
                 } else if (status == Jxl.JXL_DEC_NEED_IMAGE_OUT_BUFFER()
                         || status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS()) {
@@ -160,10 +164,13 @@ public final class JxlTranscoder {
      * Releases the JPEG buffer and appends the bytes the decoder wrote to it.
      *
      * @return the number of bytes written
+     * @throws JxlLimitException if the JPEG grows beyond the JPEG limit
      */
-    private static long drainChunk(MemorySegment decoder, MemorySegment chunk, ByteArrayOutputStream out) {
+    private static long drainChunk(MemorySegment decoder, MemorySegment chunk, ByteArrayOutputStream out,
+            JxlLimits limits) {
         long unused = Jxl.JxlDecoderReleaseJPEGBuffer(decoder);
         long written = chunk.byteSize() - unused;
+        limits.checkJpeg(out.size() + written);
         out.write(chunk.asSlice(0L, written).toArray(JAVA_BYTE), 0, (int) written);
         return written;
     }

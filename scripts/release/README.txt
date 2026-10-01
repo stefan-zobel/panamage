@@ -27,8 +27,8 @@ LICENSE                                   License of panamage (BSD-3-Clause)
 licenses/                                 Licenses of the bundled native libraries
 
 The native libraries are extracted automatically to a cache directory
-(panamage-jxl in java.io.tmpdir, or the directory named by the system property
-panamage.jxl.cache.dir). Nothing needs to be installed.
+(panamage-jxl-<user> in java.io.tmpdir, or the directory named by the system
+property panamage.jxl.cache.dir). Nothing needs to be installed.
 
 
 Trying it out
@@ -80,11 +80,12 @@ the Javadoc of JxlImageMetadata, JxlImageWriter and JxlImageWriteParam.
 Untrusted input
 ---------------
 A small JPEG XL file can declare a huge image. panamage therefore rejects
-images beyond 256 megapixels and EXIF or XMP boxes beyond 16 MiB with a
-JxlLimitException before the memory is allocated. Other limits can be passed
-as JxlLimits to JxlDecoder, JxlTranscoder.toJpeg and JxlImageReader.setLimits,
-or set with the system properties panamage.jxl.max.pixels and
-panamage.jxl.max.metadata.bytes. For fully untrusted input, decoding in a
+images beyond 256 megapixels, EXIF or XMP boxes beyond 16 MiB and
+reconstructed JPEG files beyond 1 GiB with a JxlLimitException. Other limits
+can be passed as JxlLimits to JxlDecoder, JxlTranscoder.toJpeg and
+JxlImageReader.setLimits, or set with the system properties
+panamage.jxl.max.pixels, panamage.jxl.max.metadata.bytes and
+panamage.jxl.max.jpeg.bytes. For fully untrusted input, decoding in a
 separate process with a memory limit is the strongest protection.
 
 

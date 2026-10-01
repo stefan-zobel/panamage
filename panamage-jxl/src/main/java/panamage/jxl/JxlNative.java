@@ -13,7 +13,11 @@ import panamage.jxl.internal.NativeLibraries;
  * <li>the platform artifact on the class path or module path, for example
  *     {@code panamage-jxl-natives-windows-x86_64}; its libraries are extracted
  *     to the directory named by {@code panamage.jxl.cache.dir}, by default
- *     {@code panamage-jxl} in {@code java.io.tmpdir};</li>
+ *     {@code panamage-jxl-<user>} in {@code java.io.tmpdir}; on Linux and
+ *     macOS, the default directory must belong to the current user and must
+ *     not be writable by others, otherwise a new temporary directory is used
+ *     instead (a configured directory is used as it is and should be private
+ *     to the user, too);</li>
  * <li>libjxl installed on the system.</li>
  * </ol>
  * The library must have the major and minor version the bindings were created

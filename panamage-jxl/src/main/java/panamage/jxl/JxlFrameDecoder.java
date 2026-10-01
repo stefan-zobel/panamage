@@ -27,9 +27,10 @@ import panamage.jxl.ffi.JxlFrameHeader;
  * }
  * The pixel limit applies to each frame and to every layer of all frames.
  * <p>
- * The decoder holds native memory and a thread pool until it is closed. It is
- * not thread-safe, but it may be used by different threads one after the
- * other. After an exception, it should be closed.
+ * The decoder holds native memory and a thread pool until it is closed. Its
+ * methods are synchronized: a call waits until a call in another thread has
+ * finished, so {@link #close()} never releases memory that libjxl still uses.
+ * After an exception, the decoder should be closed.
  */
 public final class JxlFrameDecoder implements AutoCloseable {
 
@@ -141,7 +142,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * @throws IllegalStateException if the decoder is closed
      * @throws JxlException          if the data is not a valid JPEG XL image
      */
-    public JxlFrame next() {
+    public synchronized JxlFrame next() {
         checkOpen();
         if (finished) {
             return null;
@@ -185,7 +186,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * @throws IllegalArgumentException if {@code frames} is negative
      * @throws IllegalStateException    if the decoder is closed
      */
-    public void skip(int frames) {
+    public synchronized void skip(int frames) {
         checkOpen();
         if (frames < 0) {
             throw new IllegalArgumentException("frames must not be negative: " + frames);
@@ -203,7 +204,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
      *
      * @return the index of the next frame
      */
-    public int nextIndex() {
+    public synchronized int nextIndex() {
         return nextIndex;
     }
 
@@ -212,7 +213,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * decoder has no effect.
      */
     @Override
-    public void close() {
+    public synchronized void close() {
         if (!closed) {
             closed = true;
             decoder.close();

@@ -59,6 +59,23 @@ class DecompressionBombTest {
     }
 
     @Test
+    void rejectsJpegReconstructionBeyondTheJpegLimit() {
+        byte[] jxl = TestImages.resource(TestImages.PHOTO_CJXL_REFERENCE);
+        byte[] jpeg = JxlTranscoder.toJpeg(jxl);
+        JxlLimits tooSmall = JxlLimits.defaults().withMaxJpegBytes(jpeg.length - 1);
+        JxlLimits justEnough = JxlLimits.defaults().withMaxJpegBytes(jpeg.length);
+
+        JxlLimitException e = assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, tooSmall));
+        assertEquals("Reconstructed JPEG exceeds the limit of " + (jpeg.length - 1) + " bytes", e.getMessage());
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, justEnough));
+        // Small chunks make the buffer grow, which is checked against the limit, too.
+        assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, 1, tooSmall));
+        assertThrows(JxlLimitException.class,
+                () -> JxlTranscoder.toJpeg(jxl, 1, JxlLimits.defaults().withMaxJpegBytes(16)));
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1, justEnough));
+    }
+
+    @Test
     void countsExtraChannels() {
         // 3 color and 2 extra channels count twice.
         byte[] data = encode(16, 16, 16, 16, 2);

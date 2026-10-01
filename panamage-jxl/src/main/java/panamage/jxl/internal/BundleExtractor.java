@@ -25,6 +25,12 @@ import panamage.jxl.spi.JxlNativeBundle;
  * expected content are reused; missing, damaged or modified files are
  * replaced atomically. Several processes may extract the same bundle at the
  * same time.
+ * <p>
+ * In the default cache directory, the cache directory and the bundle
+ * directory must be private to the current user (see
+ * {@link PrivateDirectory}); otherwise another user could replace a library
+ * after it has been checked and before it is loaded. A directory the user has
+ * chosen is used as it is.
  */
 final class BundleExtractor {
 
@@ -32,15 +38,69 @@ final class BundleExtractor {
     }
 
     /**
-     * Extracts the bundle below {@code cacheRoot}.
+     * Extracts the bundle below {@code cacheRoot}, which must be private to
+     * the current user.
+     *
+     * @return the paths of the extracted libraries, in load order
+     * @throws PrivateDirectory.UnsafeDirectoryException if a directory may be
+     *                                                   modified by other users
+     * @throws IOException if a library cannot be read or written
+     */
+    static List<Path> extract(JxlNativeBundle bundle, Path cacheRoot) throws IOException {
+        return extract(bundle, cacheRoot, true);
+    }
+
+    /**
+     * Like {@link #extract(JxlNativeBundle, Path)}, but a cache directory that
+     * other users may modify is replaced by a new temporary directory, which
+     * is deleted when the JVM exits.
      *
      * @return the paths of the extracted libraries, in load order
      * @throws IOException if a library cannot be read or written
      */
-    static List<Path> extract(JxlNativeBundle bundle, Path cacheRoot) throws IOException {
+    static List<Path> extractPrivately(JxlNativeBundle bundle, Path cacheRoot) throws IOException {
+        try {
+            return extract(bundle, cacheRoot, true);
+        } catch (PrivateDirectory.UnsafeDirectoryException e) {
+            Path temporary = Files.createTempDirectory("panamage-jxl-");
+            temporary.toFile().deleteOnExit();
+            List<Path> paths = extract(bundle, temporary, true);
+            // Files registered later are deleted first, so the libraries go before their directory.
+            if (!paths.isEmpty()) {
+                paths.getFirst().getParent().toFile().deleteOnExit();
+            }
+            for (Path path : paths) {
+                path.toFile().deleteOnExit();
+            }
+            return paths;
+        }
+    }
+
+    /**
+     * Extracts the bundle below a cache directory the user has chosen, without
+     * checking existing directories. New directories are still private.
+     *
+     * @return the paths of the extracted libraries, in load order
+     * @throws IOException if a library cannot be read or written
+     */
+    static List<Path> extractUnchecked(JxlNativeBundle bundle, Path cacheRoot) throws IOException {
+        return extract(bundle, cacheRoot, false);
+    }
+
+    private static List<Path> extract(JxlNativeBundle bundle, Path cacheRoot, boolean check) throws IOException {
         Map<String, byte[]> contents = readAll(bundle);
+        Path parent = cacheRoot.toAbsolutePath().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         Path dir = cacheRoot.resolve(bundle.platform() + "-" + bundle.libjxlVersion() + "-" + contentHash(contents));
-        Files.createDirectories(dir);
+        if (check) {
+            PrivateDirectory.create(cacheRoot);
+            PrivateDirectory.create(dir);
+        } else {
+            PrivateDirectory.createUnchecked(cacheRoot);
+            PrivateDirectory.createUnchecked(dir);
+        }
 
         List<Path> paths = new ArrayList<>();
         for (Map.Entry<String, byte[]> entry : contents.entrySet()) {

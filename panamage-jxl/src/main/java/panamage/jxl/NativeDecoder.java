@@ -48,7 +48,7 @@ final class NativeDecoder implements AutoCloseable {
 
     /**
      * Creates a decoder that runs on the calling thread, for reading headers
-     * without the cost of starting a thread pool.
+     * and metadata boxes without the cost of starting a thread pool.
      *
      * @return the new decoder
      * @throws JxlException if the decoder cannot be created
