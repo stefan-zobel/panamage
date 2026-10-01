@@ -74,6 +74,9 @@
 		<conformance.dir>${tools.dir}/conformance-b1d0f99</conformance.dir>
 		<libjxl.version>0.12.0</libjxl.version>
 		<junit.version>6.1.3</junit.version>
+		<!-- Fixed time stamp of the files in the JARs, so that builds of the same sources are
+		     byte-identical (reproducible builds). -->
+		<project.build.outputTimestamp>2026-10-01T00:00:00Z</project.build.outputTimestamp>
 	</properties>
 
 	<dependencyManagement>
@@ -157,6 +160,16 @@
 					<artifactId>maven-jar-plugin</artifactId>
 					<version>3.5.1</version>
 				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-source-plugin</artifactId>
+					<version>3.4.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-javadoc-plugin</artifactId>
+					<version>3.12.0</version>
+				</plugin>
 			</plugins>
 		</pluginManagement>
 		<plugins>
@@ -178,6 +191,42 @@
 							<version>${maven.compiler.release}</version>
 						</jdk>
 					</toolchains>
+				</configuration>
+			</plugin>
+			<!-- Sources and Javadoc JARs, required by Maven Central. They are built on every
+			     verify, so that Javadoc errors show up early. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<doclint>all,-missing</doclint>
+					<failOnWarnings>true</failOnWarnings>
+					<notimestamp>true</notimestamp>
+					<quiet>true</quiet>
+					<!-- The web fonts would add about 4 MB to every Javadoc JAR. -->
+					<additionalOptions>
+						<additionalOption>--no-fonts</additionalOption>
+					</additionalOptions>
 				</configuration>
 			</plugin>
 		</plugins>

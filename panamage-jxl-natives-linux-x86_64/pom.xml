@@ -13,6 +13,27 @@
 	<name>panamage-jxl-natives-linux-x86_64</name>
 	<description>Native libjxl libraries for Linux x86_64 (glibc 2.29 or newer)</description>
 
+	<!-- The native libraries are libjxl with skcms (BSD-3-Clause), Brotli (MIT) and Highway
+	     (Apache-2.0 or BSD-3-Clause); the Java code is part of panamage (BSD-3-Clause).
+	     The license texts are in META-INF/licenses of the JAR. -->
+	<licenses>
+		<license>
+			<name>BSD-3-Clause</name>
+			<url>https://spdx.org/licenses/BSD-3-Clause.html</url>
+			<distribution>repo</distribution>
+		</license>
+		<license>
+			<name>MIT</name>
+			<url>https://spdx.org/licenses/MIT.html</url>
+			<distribution>repo</distribution>
+		</license>
+		<license>
+			<name>Apache-2.0</name>
+			<url>https://spdx.org/licenses/Apache-2.0.html</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
 	<properties>
 		<!-- Source of the shared libraries and their location inside the JAR. -->
 		<natives.lib.dir>${jxl.native.linux.dir}/lib</natives.lib.dir>

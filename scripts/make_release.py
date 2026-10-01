@@ -1,4 +1,4 @@
-"""Build the files for a panamage release on GitHub.
+"""Build the files for a panamage release on GitHub and Maven Central.
 
 Builds the project with all tests (optionally also on Linux in WSL) and writes
 to dist/<version>/:
@@ -10,10 +10,21 @@ to dist/<version>/:
     native libraries
   * SHA256SUMS for all files, in the format of sha256sum
 
-The version is taken from the root POM and must not be a snapshot.
+With --central, it also writes central/panamage-<version>-central.zip, the
+bundle for a manual upload to the Maven Central Portal: the parent POM and,
+for every module, its POM, JAR, sources JAR and Javadoc JAR in the Maven
+repository layout, each with a GPG signature (.asc) and MD5 and SHA-1
+checksums. The files are signed with gpg (--gpg, or the PANAMAGE_GPG
+environment variable, or gpg on the PATH) and the key given by --gpg-key or
+the PANAMAGE_GPG_KEY environment variable (a fingerprint or key ID), or else
+the default key of gpg; gpg may ask for the passphrase. Nothing is uploaded.
+
+The version is taken from the root POM and must not be a snapshot, except with
+--dry-run, which writes to target/release-dry-run/<version>/ instead of dist/
+to try out the release steps.
 
 Usage:
-  python make_release.py [--skip-build] [--wsl]
+  python make_release.py [--skip-build] [--wsl] [--central [--gpg PATH] [--gpg-key ID]] [--dry-run]
 """
 
 import argparse
@@ -36,7 +47,18 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = SCRIPTS_DIR / "release"
 DIST_DIR = PROJECT_DIR / "dist"
 
+DRY_RUN_DIR = PROJECT_DIR / "target" / "release-dry-run"
+
 COMMON_MODULES = ["panamage-jxl-spi", "panamage-jxl", "panamage-jxl-imageio"]
+
+GROUP_ID = "net.sourceforge.streamsupport"
+PARENT_ARTIFACT = "panamage"
+GPG_ENVIRONMENT_VARIABLE = "PANAMAGE_GPG"
+GPG_KEY_ENVIRONMENT_VARIABLE = "PANAMAGE_GPG_KEY"
+# POM elements Maven Central requires; all but name may be inherited from the parent POM.
+REQUIRED_POM_ELEMENTS = ["name", "description", "url", "licenses", "developers", "scm"]
+# Classifiers of the JARs of every module: the classes, the sources and the Javadoc.
+JAR_CLASSIFIERS = ["", "-sources", "-javadoc"]
 
 PLATFORMS = {
     "windows-x86_64": {
@@ -87,11 +109,15 @@ def build(wsl: bool) -> None:
     run([str(wrapper), "-B", "clean", "verify"])
 
 
-def module_jar(module: str, version: str) -> Path:
-    jar = PROJECT_DIR / module / "target" / f"{module}-{version}.jar"
+def module_jar(module: str, version: str, classifier: str = "") -> Path:
+    jar = PROJECT_DIR / module / "target" / f"{module}-{version}{classifier}.jar"
     if not jar.is_file():
         raise SystemExit(f"{jar} not found; build the project first or omit --skip-build")
     return jar
+
+
+def jar_modules() -> list[str]:
+    return COMMON_MODULES + [f"panamage-jxl-natives-{p}" for p in PLATFORMS]
 
 
 def bundled_licenses(natives_jar: Path) -> dict[str, bytes]:
@@ -145,19 +171,111 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def check_pom(pom: Path, parent: ET.Element, version: str) -> None:
+    """Fails unless the POM has the information Maven Central requires, itself or from the parent."""
+    root = ET.parse(pom).getroot()
+    for element in REQUIRED_POM_ELEMENTS:
+        own = root.find(f"m:{element}", POM_NAMESPACE)
+        inherited = parent.find(f"m:{element}", POM_NAMESPACE) if element != "name" else None
+        if own is None and inherited is None:
+            raise SystemExit(f"{pom}: <{element}> is missing")
+    parent_ref = root.find("m:parent", POM_NAMESPACE)
+    pom_version = (parent_ref if parent_ref is not None else root).findtext("m:version", namespaces=POM_NAMESPACE)
+    if (pom_version or "").strip() != version:
+        raise SystemExit(f"{pom}: version {pom_version} instead of {version}")
+    if parent_ref is None and root.find("m:properties/m:project.build.outputTimestamp", POM_NAMESPACE) is None:
+        raise SystemExit(f"{pom}: project.build.outputTimestamp is not set; the JARs are not reproducible")
+
+
+def gpg_command(gpg: str, key: str | None) -> list[str]:
+    """Checks that gpg runs and has the secret key to sign with (or any secret key without one)."""
+    try:
+        listing = subprocess.run([gpg, "--batch", "--list-secret-keys", "--with-colons", *([key] if key else [])],
+                                 capture_output=True, text=True)
+    except OSError as e:
+        raise SystemExit(f"Cannot run {gpg}: {e}; pass the path of gpg with --gpg "
+                         f"or the {GPG_ENVIRONMENT_VARIABLE} environment variable")
+    if listing.returncode != 0 or not any(line.startswith("sec:") for line in listing.stdout.splitlines()):
+        if key:
+            raise SystemExit(f"{gpg} has no secret key {key}; check --gpg-key or the "
+                             f"{GPG_KEY_ENVIRONMENT_VARIABLE} environment variable, and --gpg")
+        raise SystemExit(f"{gpg} has no secret key; pass the gpg that holds your key with --gpg")
+    return [gpg]
+
+
+def sign(gpg: list[str], key: str | None, path: Path) -> None:
+    """Writes the ASCII-armored detached signature <path>.asc and verifies it."""
+    signature = path.with_name(path.name + ".asc")
+    # Without --batch, so that gpg can ask for the passphrase.
+    run([*gpg, "--yes", "--armor", "--detach-sign", *(["--local-user", key] if key else []),
+         "--output", str(signature), str(path)])
+    subprocess.run([*gpg, "--batch", "--verify", str(signature), str(path)], check=True, capture_output=True)
+
+
+def write_central_bundle(dist: Path, version: str, gpg: list[str], key: str | None) -> Path:
+    """Writes the bundle for the Maven Central Portal and returns its path."""
+    parent_pom = PROJECT_DIR / "pom.xml"
+    parent = ET.parse(parent_pom).getroot()
+    # Repository path -> source file.
+    files: dict[str, Path] = {}
+    for artifact, pom in [(PARENT_ARTIFACT, parent_pom)] + [(m, PROJECT_DIR / m / "pom.xml") for m in jar_modules()]:
+        check_pom(pom, parent, version)
+        directory = f"{GROUP_ID.replace('.', '/')}/{artifact}/{version}"
+        files[f"{directory}/{artifact}-{version}.pom"] = pom
+        if artifact != PARENT_ARTIFACT:
+            for classifier in JAR_CLASSIFIERS:
+                jar = module_jar(artifact, version, classifier)
+                if classifier == "" and jar.read_bytes() != (dist / jar.name).read_bytes():
+                    raise SystemExit(f"{jar.name} differs from the JAR in {dist}")
+                files[f"{directory}/{artifact}-{version}{classifier}.jar"] = jar
+
+    central = dist / "central"
+    if central.exists():
+        shutil.rmtree(central)
+    staging = central / "staging"
+    for path, source in files.items():
+        target = staging / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        sign(gpg, key, target)
+        data = target.read_bytes()
+        target.with_name(target.name + ".md5").write_text(hashlib.md5(data).hexdigest(), encoding="ascii")
+        target.with_name(target.name + ".sha1").write_text(hashlib.sha1(data).hexdigest(), encoding="ascii")
+
+    bundle = central / f"panamage-{version}-central.zip"
+    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(p for p in staging.rglob("*") if p.is_file()):
+            archive.write(path, path.relative_to(staging).as_posix())
+    shutil.rmtree(staging)
+    print(f"\nMaven Central bundle {bundle} ({bundle.stat().st_size:,} bytes): "
+          f"{len(files)} files, each with .asc, .md5 and .sha1")
+    return bundle
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--skip-build", action="store_true", help="use the JARs that are already built")
     parser.add_argument("--wsl", action="store_true", help="also run all tests on Linux in WSL first")
+    parser.add_argument("--central", action="store_true",
+                        help="also write the signed bundle for the Maven Central Portal")
+    parser.add_argument("--gpg", default=os.environ.get(GPG_ENVIRONMENT_VARIABLE, "gpg"),
+                        help=f"gpg executable for signing (default: ${GPG_ENVIRONMENT_VARIABLE} or gpg)")
+    parser.add_argument("--gpg-key", default=os.environ.get(GPG_KEY_ENVIRONMENT_VARIABLE, "").strip() or None,
+                        help=f"fingerprint or key ID of the key to sign with "
+                             f"(default: ${GPG_KEY_ENVIRONMENT_VARIABLE} or the default key of gpg)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="allow a snapshot version and write to target/release-dry-run instead of dist")
     args = parser.parse_args()
 
     version, libjxl_version = pom_values()
-    if version.endswith("-SNAPSHOT"):
+    if version.endswith("-SNAPSHOT") and not args.dry_run:
         raise SystemExit(f"Version {version} is a snapshot; set a release version in pom.xml first")
+    # Fail before the long build if the bundle cannot be signed.
+    gpg = gpg_command(args.gpg, args.gpg_key) if args.central else []
     if not args.skip_build:
         build(args.wsl)
 
-    dist = DIST_DIR / version
+    dist = (DRY_RUN_DIR if args.dry_run else DIST_DIR) / version
     if dist.exists():
         try:
             shutil.rmtree(dist)
@@ -166,7 +284,7 @@ def main() -> int:
                              "(for example an archive viewer). Close it and run again with --skip-build.")
     dist.mkdir(parents=True)
 
-    for module in COMMON_MODULES + [f"panamage-jxl-natives-{p}" for p in PLATFORMS]:
+    for module in jar_modules():
         shutil.copy2(module_jar(module, version), dist)
     for platform, settings in PLATFORMS.items():
         root = f"panamage-{version}-{platform}"
@@ -183,6 +301,9 @@ def main() -> int:
     print(f"\nRelease files in {dist}:")
     for path in files + [dist / "SHA256SUMS"]:
         print(f"  {path.stat().st_size:>10,}  {path.name}")
+
+    if args.central:
+        write_central_bundle(dist, version, gpg, args.gpg_key)
     return 0
 
 

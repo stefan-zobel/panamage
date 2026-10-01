@@ -259,10 +259,39 @@ Other scripts in `scripts/`:
 | `jextract_jxl.py` | Regenerate the checked-in jextract bindings (`--update-symbols` also refreshes the symbol list) |
 | `make_test_images.py` | Regenerate the test images |
 | `wsl_verify.py` | Build and run all tests on Linux in WSL (from Windows) |
-| `make_release.py` | Build the release files in `dist/<version>` (`--wsl` also tests on Linux) |
+| `make_release.py` | Build the release files in `dist/<version>` (`--wsl` also tests on Linux, `--central` writes the signed bundle for Maven Central) |
 | `build_libjxl_macos.py` | Build the libjxl libraries for macOS arm64 from source (on macOS; used by the workflow below) |
 | `build_libjxl_linux_aarch64.py` | Build the libjxl libraries for Linux aarch64 from source (in the manylinux_2_28 container; used by the workflow below) |
 | `write_toolchains.py` | Write a Maven toolchains file for a JDK 25 |
+
+Every build also creates sources and Javadoc JARs. The JARs are reproducible:
+`project.build.outputTimestamp` fixes the time stamps, so the same sources
+give byte-identical JARs.
+
+### Releasing
+
+Releases are built and uploaded by hand:
+
+1. Set the release version in all POMs and update the status line and
+   "Getting started" in this README.
+2. Build, test and sign:
+
+   ```sh
+   python scripts/make_release.py --wsl --central --gpg <path of gpg> --gpg-key <fingerprint>
+   ```
+
+   This writes the files for GitHub to `dist/<version>` and the bundle for
+   Maven Central to `dist/<version>/central`. The environment variables
+   `PANAMAGE_GPG` (the gpg executable) and `PANAMAGE_GPG_KEY` (fingerprint or
+   key ID) can replace `--gpg` and `--gpg-key`; without a key, gpg signs with
+   its default key. gpg may ask for the passphrase. `--dry-run` tries this out
+   with a snapshot version in `target/release-dry-run`.
+3. Upload `panamage-<version>-central.zip` in the
+   [Central Portal](https://central.sonatype.com/publishing) (Publish
+   Component), wait for the validation and publish it.
+4. Tag the release commit and create the GitHub release with the other files
+   of `dist/<version>`, including `SHA256SUMS`.
+5. Set the next snapshot version.
 
 ## Continuous integration
 
