@@ -10,7 +10,9 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 import panamage.jxl.ffi.Jxl;
@@ -31,12 +33,16 @@ import panamage.jxl.ffi.JxlFrameHeader;
  * }
  * The first frame sets the size, the channels, the sample type and the ICC
  * profile of the animation; every further frame must match it (see
- * {@link JxlEncoder} for the supported images). Every frame covers the whole
- * image and replaces the previous one. Frame durations are given in ticks of
- * the {@link JxlAnimationHeader}; a frame with a duration of 0 is only
- * allowed as the last frame, because decoders combine it with the following
- * frame. The same {@link JxlEncodeOptions} apply to every frame, and an EXIF
- * orientation in the metadata applies to every frame.
+ * {@link JxlEncoder} for the supported images). The frames are either all
+ * {@link JxlImage}s or all {@link JxlChannels} with the same extra channels,
+ * for example the slices or time points of a stack of microscope images
+ * (JPEG XL has no further dimensions, so a stack is stored as an animation).
+ * Every frame covers the whole image and replaces the previous one. Frame
+ * durations are given in ticks of the {@link JxlAnimationHeader}; a frame
+ * with a duration of 0 is only allowed as the last frame, because decoders
+ * combine it with the following frame. The same {@link JxlEncodeOptions}
+ * apply to every frame, and an EXIF orientation in the metadata applies to
+ * every frame.
  * <p>
  * The pixels are copied when a frame is added, so the caller may reuse the
  * arrays. A frame is encoded and written when the next frame is added or
@@ -67,8 +73,10 @@ public final class JxlFrameEncoder implements AutoCloseable {
     private final JxlEncodeOptions options;
     private final JxlMetadata metadata;
     private MemorySegment settings;
-    private JxlImage first;
+    private Layout first;
+    /** The interleaved samples of a pending {@link JxlImage}, or the color channels of {@link JxlChannels}. */
     private MemorySegment pending;
+    private final List<MemorySegment> pendingExtra = new ArrayList<>();
     private long pendingDuration;
     private String pendingName;
     private boolean finished;
@@ -198,25 +206,105 @@ public final class JxlFrameEncoder implements AutoCloseable {
     public synchronized void add(JxlImage image, long durationTicks, String name) throws IOException {
         checkWritable();
         Objects.requireNonNull(image, "image");
+        if (first == null && image.channels() > 4) {
+            throw new IllegalArgumentException("At most 4 channels are supported: " + image.channels());
+        }
+        add(Layout.of(image), image, durationTicks, name);
+    }
+
+    /**
+     * Adds a frame with separate channels without a name.
+     *
+     * @param channels      the channels of the frame
+     * @param durationTicks how long the frame is shown, in ticks, at most
+     *                      4294967295 (2<sup>32</sup> - 1); 0 only for the
+     *                      last frame
+     * @throws IOException              if writing the previous frame fails
+     * @throws IllegalArgumentException if the frame does not match the first
+     *                                  frame, an extra channel has a type that
+     *                                  cannot be written, the duration is out
+     *                                  of range or the previous frame has a
+     *                                  duration of 0
+     * @throws IllegalStateException    if the encoder is finished, closed or
+     *                                  failed
+     * @throws JxlException             if libjxl rejects the image or the
+     *                                  settings
+     */
+    public synchronized void add(JxlChannels channels, long durationTicks) throws IOException {
+        add(channels, durationTicks, "");
+    }
+
+    /**
+     * Adds a frame with separate channels, for example one time point or
+     * slice of a stack of microscope images; see
+     * {@link JxlEncoder#encode(JxlChannels, JxlEncodeOptions)}. The previous
+     * frame is encoded and written now. All frames must have the same color
+     * and extra channels.
+     *
+     * @param channels      the channels of the frame
+     * @param durationTicks how long the frame is shown, in ticks, at most
+     *                      4294967295 (2<sup>32</sup> - 1); 0 only for the
+     *                      last frame
+     * @param name          the name of the frame, or {@code ""} for none; at
+     *                      most 1071 bytes in UTF-8
+     * @throws IOException              if writing the previous frame fails
+     * @throws IllegalArgumentException if the frame does not match the first
+     *                                  frame, an extra channel has a type that
+     *                                  cannot be written, the duration or the
+     *                                  name is invalid, or the previous frame
+     *                                  has a duration of 0
+     * @throws IllegalStateException    if the encoder is finished, closed or
+     *                                  failed
+     * @throws JxlException             if libjxl rejects the image or the
+     *                                  settings
+     */
+    public synchronized void add(JxlChannels channels, long durationTicks, String name) throws IOException {
+        checkWritable();
+        Objects.requireNonNull(channels, "channels");
+        if (first == null) {
+            JxlEncoder.checkWritable(channels.extraChannels());
+        }
+        add(Layout.of(channels), channels, durationTicks, name);
+    }
+
+    /**
+     * Adds a decoded frame with separate channels, with its duration in ticks
+     * and its name; the duration in milliseconds is ignored.
+     *
+     * @param frame the frame
+     * @throws IOException              if writing the previous frame fails
+     * @throws IllegalArgumentException if the frame does not match the first
+     *                                  frame, the duration or the name is
+     *                                  invalid, or the previous frame has a
+     *                                  duration of 0
+     * @throws IllegalStateException    if the encoder is finished, closed or
+     *                                  failed
+     * @throws JxlException             if libjxl rejects the image or the
+     *                                  settings
+     * @see JxlFrameDecoder#nextChannels()
+     */
+    public synchronized void add(JxlChannelsFrame frame) throws IOException {
+        Objects.requireNonNull(frame, "frame");
+        add(frame.channels(), frame.info().durationTicks(), frame.info().name());
+    }
+
+    /** Adds a {@link JxlImage} or {@link JxlChannels} frame with the given layout. */
+    private void add(Layout layout, Object image, long durationTicks, String name) throws IOException {
         Objects.requireNonNull(name, "name");
         if (durationTicks < 0 || durationTicks > MAX_DURATION_TICKS) {
             throw new IllegalArgumentException("durationTicks must be 0 to " + MAX_DURATION_TICKS + ": "
                     + durationTicks);
         }
         checkName(name);
-        if (first == null) {
-            if (image.channels() > 4) {
-                throw new IllegalArgumentException("At most 4 channels are supported: " + image.channels());
-            }
-        } else {
-            checkMatchesFirst(image);
+        if (first != null) {
+            first.checkMatches(layout);
             if (pendingDuration == 0) {
                 throw new IllegalArgumentException("Only the last frame may have a duration of 0");
             }
         }
         try {
             if (first == null) {
-                start(image);
+                start(layout, image);
             } else {
                 try (Arena call = Arena.ofConfined()) {
                     queuePending(call);
@@ -297,16 +385,26 @@ public final class JxlFrameEncoder implements AutoCloseable {
     }
 
     /** Sets up the image from the first frame and writes the metadata boxes before it. */
-    private void start(JxlImage image) {
+    private void start(Layout layout, Object image) {
         try (Arena call = Arena.ofConfined()) {
-            JxlEncoder.configure(encoder, image, options, metadata.orientation(), header, call);
+            switch (image) {
+                case JxlImage img -> JxlEncoder.configure(encoder, img, options, metadata.orientation(), header, call);
+                case JxlChannels img -> JxlEncoder.configure(encoder, img, options, metadata.orientation(), header,
+                        call);
+                default -> throw new IllegalArgumentException(image.getClass().getName());
+            }
             JxlEncoder.addBoxes(encoder, metadata, call);
         }
-        settings = JxlEncoder.createFrameSettings(encoder, options);
-        int sampleBytes = image.sampleType().bytesPerSample();
-        pending = arena.allocate((long) image.width() * image.height() * image.channels() * sampleBytes,
-                sampleBytes);
-        first = image;
+        settings = image instanceof JxlChannels channels
+                ? JxlEncoder.createFrameSettings(encoder, options, channels)
+                : JxlEncoder.createFrameSettings(encoder, options);
+        int sampleBytes = layout.sampleType().bytesPerSample();
+        long planeBytes = (long) layout.width() * layout.height() * sampleBytes;
+        pending = arena.allocate(planeBytes * layout.channels(), sampleBytes);
+        for (int i = 0; i < layout.extraChannels().size(); i++) {
+            pendingExtra.add(arena.allocate(planeBytes, sampleBytes));
+        }
+        first = layout;
     }
 
     /** Hands the pending frame to libjxl, which encodes it on the next output call. */
@@ -318,11 +416,19 @@ public final class JxlFrameEncoder implements AutoCloseable {
         encoder.check(Jxl.JxlEncoderSetFrameHeader(settings, frameHeader), "JxlEncoderSetFrameHeader");
         encoder.check(Jxl.JxlEncoderSetFrameName(settings, call.allocateFrom(pendingName)),
                 "JxlEncoderSetFrameName");
-        encoder.check(Jxl.JxlEncoderAddImageFrame(settings, JxlEncoder.pixelFormat(first, call), pending,
-                pending.byteSize()), "JxlEncoderAddImageFrame");
+        JxlSampleType type = first.sampleType();
+        encoder.check(Jxl.JxlEncoderAddImageFrame(settings, JxlEncoder.pixelFormat(first.channels(), type, call),
+                pending, pending.byteSize()), "JxlEncoderAddImageFrame");
+        // libjxl ignores the number of channels of an extra channel buffer.
+        MemorySegment format = JxlEncoder.pixelFormat(1, type, call);
+        for (int i = 0; i < pendingExtra.size(); i++) {
+            MemorySegment plane = pendingExtra.get(i);
+            encoder.check(Jxl.JxlEncoderSetExtraChannelBuffer(settings, format, plane, plane.byteSize(), i),
+                    "JxlEncoderSetExtraChannelBuffer");
+        }
     }
 
-    private void copyToPending(JxlImage image) {
+    private void copyToPending(Object image) {
         switch (image) {
             case JxlImage.Uint8 img -> MemorySegment.copy(img.pixels(), 0, pending, JAVA_BYTE, 0L,
                     img.pixels().length);
@@ -330,24 +436,71 @@ public final class JxlFrameEncoder implements AutoCloseable {
                     img.pixels().length);
             case JxlImage.Float32 img -> MemorySegment.copy(img.pixels(), 0, pending, JAVA_FLOAT, 0L,
                     img.pixels().length);
+            case JxlChannels channels -> {
+                JxlEncoder.writeColorPlanes(channels, pending);
+                for (int i = 0; i < pendingExtra.size(); i++) {
+                    JxlEncoder.writePlane(channels, channels.colorChannels() + i, pendingExtra.get(i));
+                }
+            }
+            default -> throw new IllegalArgumentException(image.getClass().getName());
         }
     }
 
-    private void checkMatchesFirst(JxlImage image) {
-        if (image.width() != first.width() || image.height() != first.height()) {
-            throw new IllegalArgumentException("The frame is " + image.width() + "x" + image.height()
-                    + ", the animation " + first.width() + "x" + first.height());
+    /**
+     * What all frames of an animation must have in common.
+     *
+     * @param channels      the interleaved channels of a {@link JxlImage}, or the
+     *                      color channels of {@link JxlChannels}
+     * @param extraChannels the extra channels of {@link JxlChannels}
+     * @param separate      whether the frames are {@link JxlChannels}
+     */
+    private record Layout(int width, int height, JxlSampleType sampleType, int bitsPerSample, int channels,
+            List<JxlExtraChannel> extraChannels, byte[] iccProfile, boolean separate) {
+
+        static Layout of(JxlImage image) {
+            return new Layout(image.width(), image.height(), image.sampleType(), image.sampleType().bits(),
+                    image.channels(), List.of(), image.iccProfile(), false);
         }
-        if (image.channels() != first.channels()) {
-            throw new IllegalArgumentException("The frame has " + image.channels() + " channels, the animation "
-                    + first.channels());
+
+        static Layout of(JxlChannels channels) {
+            return new Layout(channels.width(), channels.height(), channels.sampleType(), channels.bitsPerSample(),
+                    channels.colorChannels(), channels.extraChannels(), channels.iccProfile(), true);
         }
-        if (image.sampleType() != first.sampleType()) {
-            throw new IllegalArgumentException("The frame has " + image.sampleType() + " samples, the animation "
-                    + first.sampleType());
-        }
-        if (!Arrays.equals(image.iccProfile(), first.iccProfile())) {
-            throw new IllegalArgumentException("The frame has a different ICC profile than the animation");
+
+        /**
+         * Checks that a frame matches the first frame.
+         *
+         * @throws IllegalArgumentException if it does not
+         */
+        void checkMatches(Layout frame) {
+            if (frame.separate != separate) {
+                throw new IllegalArgumentException(separate
+                        ? "The frame is a JxlImage, the animation has JxlChannels frames"
+                        : "The frame is a JxlChannels, the animation has JxlImage frames");
+            }
+            if (frame.width != width || frame.height != height) {
+                throw new IllegalArgumentException("The frame is " + frame.width + "x" + frame.height
+                        + ", the animation " + width + "x" + height);
+            }
+            if (frame.channels != channels) {
+                throw new IllegalArgumentException("The frame has " + frame.channels + (separate ? " color" : "")
+                        + " channels, the animation " + channels);
+            }
+            if (!frame.extraChannels.equals(extraChannels)) {
+                throw new IllegalArgumentException("The frame has the extra channels " + frame.extraChannels
+                        + ", the animation " + extraChannels);
+            }
+            if (frame.sampleType != sampleType) {
+                throw new IllegalArgumentException("The frame has " + frame.sampleType + " samples, the animation "
+                        + sampleType);
+            }
+            if (frame.bitsPerSample != bitsPerSample) {
+                throw new IllegalArgumentException("The frame has " + frame.bitsPerSample
+                        + " bits per sample, the animation " + bitsPerSample);
+            }
+            if (!Arrays.equals(frame.iccProfile, iccProfile)) {
+                throw new IllegalArgumentException("The frame has a different ICC profile than the animation");
+            }
         }
     }
 

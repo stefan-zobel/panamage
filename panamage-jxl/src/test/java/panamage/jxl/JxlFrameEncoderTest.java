@@ -320,8 +320,8 @@ class JxlFrameEncoderTest {
             // Two bytes per character in UTF-8.
             assertThrows(IllegalArgumentException.class, () -> frames.add(rgba(1), 10, "\u00e4".repeat(536)));
             assertThrows(NullPointerException.class, () -> frames.add(rgba(1), 10, null));
-            assertThrows(NullPointerException.class, () -> frames.add(null, 10));
-            assertThrows(NullPointerException.class, () -> frames.add(null));
+            assertThrows(NullPointerException.class, () -> frames.add((JxlImage) null, 10));
+            assertThrows(NullPointerException.class, () -> frames.add((JxlFrame) null));
         }
     }
 

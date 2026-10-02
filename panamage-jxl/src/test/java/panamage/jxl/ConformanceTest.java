@@ -14,7 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Assumptions;
@@ -34,7 +36,8 @@ import panamage.jxl.ffi.JxlBasicInfo;
  * reference in the same color space; the peak error and the largest RMSE of
  * a channel must not exceed the limits of the test case. Every frame of an
  * animation is compared in the same way, and its duration and name must
- * match. Where the corpus has a reconstructed JPEG file,
+ * match. The first frame is also decoded with separate channels and compared
+ * with all channels of the reference, including the extra channels. Where the corpus has a reconstructed JPEG file,
  * {@link JxlTranscoder#toJpeg} must reproduce it.
  */
 class ConformanceTest {
@@ -113,6 +116,7 @@ class ConformanceTest {
         }
 
         compare(name, reference, 0, image, samples, referenceChannel, (Map<?, ?>) frames.get(0));
+        checkChannels(name, input, descriptor, reference, (Map<?, ?>) frames.get(0));
 
         if (frames.size() > 1) {
             List<JxlFrameInfo> frameInfos = JxlDecoder.readAnimationInfo(input).frames();
@@ -179,6 +183,63 @@ class ConformanceTest {
                 actual[peakPixel * channels + peakChannel]);
         assertTrue(rms <= rmsLimit, details);
         assertTrue(peak <= peakLimit, details);
+    }
+
+    /**
+     * Decodes the first frame with separate channels and compares all of them
+     * with the reference, including the extra channels that a JxlImage leaves
+     * out.
+     */
+    private static void checkChannels(String name, byte[] input, Map<?, ?> descriptor, Npy reference,
+            Map<?, ?> limits) {
+        List<?> types = (List<?>) descriptor.get("extra_channel_type");
+        List<?> bits = (List<?>) descriptor.get("bits_per_sample");
+        List<?> exponentBits = (List<?>) descriptor.get("exp_bits_per_sample");
+        List<JxlExtraChannelInfo> extra = JxlDecoder.readExtraChannels(input);
+        assertEquals(types.size(), extra.size(), name + ": extra channels");
+        for (int i = 0; i < extra.size(); i++) {
+            assertEquals(normalized(types.get(i)), normalized(extra.get(i).type().name()),
+                    name + ": type of extra channel " + i);
+            assertEquals(((Number) bits.get(1 + i)).intValue(), extra.get(i).bitsPerSample(),
+                    name + ": bits per sample of extra channel " + i);
+        }
+
+        JxlChannels.Float32 channels = (JxlChannels.Float32) JxlDecoder.decodeChannels(input, JxlSampleType.FLOAT32);
+        int count = channels.channels();
+        assertEquals(reference.shape()[3], count, name + ": channels");
+        int pixels = channels.width() * channels.height();
+        float[] samples = new float[pixels * count];
+        for (int c = 0; c < count; c++) {
+            float[] plane = channels.planes().get(c);
+            for (int p = 0; p < pixels; p++) {
+                samples[p * count + c] = plane[p];
+            }
+        }
+        int alphaIndex = types.indexOf("Alpha");
+        if (alphaIndex >= 0 && storesPremultipliedAlpha(input)) {
+            // The reference keeps the stored premultiplied samples, see check.
+            int alpha = channels.colorChannels() + alphaIndex;
+            for (int p = 0; p < pixels; p++) {
+                for (int c = 0; c < channels.colorChannels(); c++) {
+                    samples[p * count + c] *= samples[p * count + alpha];
+                }
+            }
+        }
+        compare(name + " with separate channels", reference, 0,
+                new JxlImage.Float32(channels.width(), channels.height(), count, samples), samples,
+                IntStream.range(0, count).toArray(), limits);
+
+        // Integer samples keep their values only if all channels are integers with the same bit depth.
+        boolean sameBits = bits.stream().distinct().count() == 1
+                && exponentBits.stream().allMatch(b -> ((Number) b).intValue() == 0)
+                && ((Number) bits.get(0)).intValue() <= 16;
+        assertEquals(sameBits ? ((Number) bits.get(0)).intValue() : 16,
+                JxlDecoder.decodeChannels(input, JxlSampleType.UINT16).bitsPerSample(),
+                name + ": bits per sample of the channels decoded to UINT16");
+    }
+
+    private static String normalized(Object channelType) {
+        return channelType.toString().replace("_", "").toUpperCase(Locale.ROOT);
     }
 
     /** Reads whether the image stores its alpha channel premultiplied. */
