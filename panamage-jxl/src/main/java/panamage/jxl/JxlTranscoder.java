@@ -24,6 +24,8 @@ import panamage.jxl.ffi.Jxl;
  * <p>
  * The results are returned as byte arrays or written to an
  * {@link OutputStream} or a {@link WritableByteChannel} as they are produced.
+ * {@code toJpeg} also reads the JPEG XL file from a {@link MemorySegment},
+ * such as a mapped file, which may be larger than 2 GiB.
  * <p>
  * {@code toJpeg} rejects images beyond the pixel limit of {@link JxlLimits}
  * with a {@link JxlLimitException}, like {@link JxlDecoder}.
@@ -212,6 +214,51 @@ public final class JxlTranscoder {
     }
 
     /**
+     * Like {@link #toJpeg(byte[], JxlLimits, OutputStream)}, reading the JPEG
+     * XL file from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jxl    the JPEG XL file
+     * @param limits the limits; {@link JxlLimits#maxPixels()} and
+     *               {@link JxlLimits#maxJpegBytes()} apply
+     * @param out    the stream that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException       if writing to the stream fails
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
+     */
+    public static long toJpeg(MemorySegment jxl, JxlLimits limits, OutputStream out) throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlLimits, WritableByteChannel)}, reading
+     * the JPEG XL file from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jxl    the JPEG XL file
+     * @param limits the limits; {@link JxlLimits#maxPixels()} and
+     *               {@link JxlLimits#maxJpegBytes()} apply
+     * @param out    the channel that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the channel fails
+     * @throws IllegalArgumentException if the channel is in non-blocking mode
+     * @throws JxlLimitException        if the image or the JPEG file exceeds
+     *                                  the limits
+     * @throws JxlException             if the data is not valid JPEG XL or
+     *                                  contains no JPEG reconstruction data
+     */
+    public static long toJpeg(MemorySegment jxl, JxlLimits limits, WritableByteChannel out) throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    }
+
+    /**
      * Like {@link #toJpeg(byte[], JxlLimits)}, with a given output buffer size
      * (tests use a small size to exercise the multi-chunk path).
      */
@@ -222,12 +269,18 @@ public final class JxlTranscoder {
     /** Restores the JPEG file to a sink, with a given output buffer size. */
     static long toJpeg(byte[] jxl, int chunkSize, JxlLimits limits, OutputSink sink) throws IOException {
         Objects.requireNonNull(jxl, "jxl");
+        return toJpeg(MemorySegment.ofArray(jxl), chunkSize, limits, sink);
+    }
+
+    private static long toJpeg(MemorySegment jxl, int chunkSize, JxlLimits limits, OutputSink sink)
+            throws IOException {
+        Objects.requireNonNull(jxl, "jxl");
         Objects.requireNonNull(limits, "limits");
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment input = arena.allocateFrom(JAVA_BYTE, jxl);
+            MemorySegment input = NativeInput.of(jxl, arena);
             JxlDecoder.checkFrames(input, limits, 1, false, arena);
             return reconstruct(input, chunkSize, limits, sink, arena);
         }

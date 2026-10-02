@@ -6,9 +6,11 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static java.lang.foreign.ValueLayout.JAVA_SHORT;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -55,6 +57,11 @@ import panamage.jxl.internal.NativeLibraries;
  * Images and metadata boxes beyond the {@link JxlLimits} are rejected with a
  * {@link JxlLimitException} before their memory is allocated; the methods
  * without a {@code JxlLimits} parameter use {@link JxlLimits#defaults()}.
+ * <p>
+ * The encoded image is passed as a byte array, as a {@link MemorySegment}
+ * (for example a mapped file or a direct buffer, passed to libjxl without a
+ * copy) or as a file {@link Path} (read into native memory, without a copy on
+ * the Java heap). Segments and files may be larger than 2 GiB.
  */
 public final class JxlDecoder {
 
@@ -79,9 +86,24 @@ public final class JxlDecoder {
      */
     public static JxlImageInfo readInfo(byte[] data) {
         Objects.requireNonNull(data, "data");
+        return readInfo(MemorySegment.ofArray(data));
+    }
+
+    /**
+     * Like {@link #readInfo(byte[])}, reading the encoded image from a memory
+     * segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data the encoded image
+     * @return the image information
+     * @throws JxlException if the data is not a valid JPEG XL image
+     */
+    public static JxlImageInfo readInfo(MemorySegment data) {
+        Objects.requireNonNull(data, "data");
         try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
-            decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING(),
-                    arena.allocateFrom(JAVA_BYTE, data));
+            decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING(), NativeInput.of(data, arena));
             MemorySegment handle = decoder.handle();
             MemorySegment info = null;
             while (true) {
@@ -102,6 +124,22 @@ public final class JxlDecoder {
     }
 
     /**
+     * Like {@link #readInfo(byte[])}, reading the encoded image from a file.
+     * Only the header is decoded, but the whole file is read.
+     *
+     * @param file the JPEG XL file
+     * @return the image information
+     * @throws IOException  if the file cannot be read
+     * @throws JxlException if the file is not a valid JPEG XL image
+     */
+    public static JxlImageInfo readInfo(Path file) throws IOException {
+        Objects.requireNonNull(file, "file");
+        try (Arena arena = Arena.ofConfined()) {
+            return readInfo(NativeInput.read(file, arena));
+        }
+    }
+
+    /**
      * Reads the type, name and bit depth of the extra channels of a JPEG XL
      * image, such as alpha or the fluorescence channels of a microscope image,
      * without decoding the pixels.
@@ -114,8 +152,25 @@ public final class JxlDecoder {
      */
     public static List<JxlExtraChannelInfo> readExtraChannels(byte[] data) {
         Objects.requireNonNull(data, "data");
+        return readExtraChannels(MemorySegment.ofArray(data));
+    }
+
+    /**
+     * Like {@link #readExtraChannels(byte[])}, reading the encoded image from
+     * a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data the encoded image
+     * @return the extra channels in the order of their planes; empty if the
+     *         image has only color channels
+     * @throws JxlException if the data is not a valid JPEG XL image
+     */
+    public static List<JxlExtraChannelInfo> readExtraChannels(MemorySegment data) {
+        Objects.requireNonNull(data, "data");
         try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
-            decoder.start(Jxl.JXL_DEC_BASIC_INFO(), arena.allocateFrom(JAVA_BYTE, data));
+            decoder.start(Jxl.JXL_DEC_BASIC_INFO(), NativeInput.of(data, arena));
             MemorySegment handle = decoder.handle();
             int status = Jxl.JxlDecoderProcessInput(handle);
             if (status != Jxl.JXL_DEC_BASIC_INFO()) {
@@ -135,8 +190,24 @@ public final class JxlDecoder {
      */
     public static JxlAnimationInfo readAnimationInfo(byte[] data) {
         Objects.requireNonNull(data, "data");
+        return readAnimationInfo(MemorySegment.ofArray(data));
+    }
+
+    /**
+     * Like {@link #readAnimationInfo(byte[])}, reading the encoded image from
+     * a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data the encoded image
+     * @return the frames and their timing
+     * @throws JxlException if the data is not a valid JPEG XL image
+     */
+    public static JxlAnimationInfo readAnimationInfo(MemorySegment data) {
+        Objects.requireNonNull(data, "data");
         try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
-            decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_FRAME(), arena.allocateFrom(JAVA_BYTE, data));
+            decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_FRAME(), NativeInput.of(data, arena));
             MemorySegment handle = decoder.handle();
             MemorySegment header = arena.allocate(JxlFrameHeader.layout());
             MemorySegment info = null;
@@ -194,10 +265,55 @@ public final class JxlDecoder {
     }
 
     /**
+     * Like {@link #readMetadata(byte[], JxlLimits)}, reading the encoded
+     * image from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data   the encoded image
+     * @param limits the limits; only {@link JxlLimits#maxMetadataBytes()}
+     *               applies
+     * @return the metadata, or {@link JxlMetadata#NONE} for a bare codestream
+     * @throws JxlLimitException if a metadata box exceeds the limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
+     */
+    public static JxlMetadata readMetadata(MemorySegment data, JxlLimits limits) {
+        return readMetadata(data, BOX_CHUNK_SIZE, limits);
+    }
+
+    /**
+     * Like {@link #readMetadata(byte[], JxlLimits)}, reading the encoded
+     * image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file   the JPEG XL file
+     * @param limits the limits; only {@link JxlLimits#maxMetadataBytes()}
+     *               applies
+     * @return the metadata, or {@link JxlMetadata#NONE} for a bare codestream
+     * @throws IOException       if the file cannot be read
+     * @throws JxlLimitException if a metadata box exceeds the limits
+     * @throws JxlException      if the file is not a valid JPEG XL image
+     */
+    public static JxlMetadata readMetadata(Path file, JxlLimits limits) throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(limits, "limits");
+        try (Arena arena = Arena.ofConfined()) {
+            return readMetadata(NativeInput.read(file, arena), BOX_CHUNK_SIZE, limits);
+        }
+    }
+
+    /**
      * Like {@link #readMetadata(byte[], JxlLimits)}, with a given initial
      * buffer size (tests use a small size to exercise the multi-chunk path).
      */
     static JxlMetadata readMetadata(byte[] data, int chunkSize, JxlLimits limits) {
+        Objects.requireNonNull(data, "data");
+        return readMetadata(MemorySegment.ofArray(data), chunkSize, limits);
+    }
+
+    private static JxlMetadata readMetadata(MemorySegment data, int chunkSize, JxlLimits limits) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(limits, "limits");
         if (chunkSize <= 0) {
@@ -207,7 +323,7 @@ public final class JxlDecoder {
             MemorySegment handle = decoder.handle();
             NativeDecoder.check(Jxl.JxlDecoderSetDecompressBoxes(handle, Jxl.JXL_TRUE()),
                     "JxlDecoderSetDecompressBoxes");
-            decoder.start(Jxl.JXL_DEC_BOX() | Jxl.JXL_DEC_BOX_COMPLETE(), arena.allocateFrom(JAVA_BYTE, data));
+            decoder.start(Jxl.JXL_DEC_BOX() | Jxl.JXL_DEC_BOX_COMPLETE(), NativeInput.of(data, arena));
 
             MemorySegment type = arena.allocate(4);
             MemorySegment chunk = arena.allocate(chunkSize);
@@ -423,10 +539,71 @@ public final class JxlDecoder {
     }
 
     /**
+     * Like {@link #decode(byte[], int, JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data     the encoded image
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies)
+     *                 and the color space
+     * @return the decoded image
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the image exceeds the limits
+     * @throws JxlException             if the data is not a valid JPEG XL image
+     */
+    public static JxlImage decode(MemorySegment data, int channels, JxlSampleType type,
+            JxlDecodeOptions options) {
+        Objects.requireNonNull(data, "data");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(options, "options");
+        checkChannels(channels);
+        try (Arena arena = Arena.ofConfined()) {
+            return decode(NativeInput.of(data, arena), channels, type, options, false, arena);
+        }
+    }
+
+    /**
+     * Like {@link #decode(byte[], int, JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file     the JPEG XL file
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies)
+     *                 and the color space
+     * @return the decoded image
+     * @throws IOException              if the file cannot be read
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the image exceeds the limits
+     * @throws JxlException             if the file is not a valid JPEG XL image
+     */
+    public static JxlImage decode(Path file, int channels, JxlSampleType type, JxlDecodeOptions options)
+            throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(options, "options");
+        checkChannels(channels);
+        try (Arena arena = Arena.ofConfined()) {
+            return decode(NativeInput.read(file, arena), channels, type, options, false, arena);
+        }
+    }
+
+    /**
      * Decodes a JPEG XL image (codestream or container) to 8-bit RGBA.
      * <p>
-     * A native segment is passed to libjxl without copying; a heap segment is
-     * copied to native memory first.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
      *
      * @param data the encoded image
      * @return the decoded image with 4 channels
@@ -447,13 +624,7 @@ public final class JxlDecoder {
      * @throws JxlException      if the data is not a valid JPEG XL image
      */
     public static JxlImage.Uint8 decode(MemorySegment data, JxlLimits limits) {
-        Objects.requireNonNull(data, "data");
-        Objects.requireNonNull(limits, "limits");
-        try (Arena arena = Arena.ofConfined()) {
-            MemorySegment input = data.isNative() ? data : arena.allocate(data.byteSize()).copyFrom(data);
-            return (JxlImage.Uint8) decode(input, RGBA, JxlSampleType.UINT8, new JxlDecodeOptions(limits, false),
-                    false, arena);
-        }
+        return (JxlImage.Uint8) decode(data, RGBA, JxlSampleType.UINT8, new JxlDecodeOptions(limits, false));
     }
 
     /**
@@ -519,9 +690,77 @@ public final class JxlDecoder {
      */
     public static List<JxlFrame> decodeFrames(byte[] data, int channels, JxlSampleType type,
             JxlDecodeOptions options) {
+        Objects.requireNonNull(data, "data");
+        return decodeFrames(MemorySegment.ofArray(data), channels, type, options);
+    }
+
+    /**
+     * Like {@link #decodeFrames(byte[], int, JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data     the encoded image
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                 all frames together and to every layer) and the color
+     *                 space
+     * @return the frames in order
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the frames exceed the limits
+     * @throws JxlException             if the data is not a valid JPEG XL image
+     */
+    public static List<JxlFrame> decodeFrames(MemorySegment data, int channels, JxlSampleType type,
+            JxlDecodeOptions options) {
+        Objects.requireNonNull(data, "data");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(options, "options");
         checkChannels(channels);
+        try (Arena arena = Arena.ofConfined()) {
+            return collectFrames(NativeInput.of(data, arena), channels, type, options);
+        }
+    }
+
+    /**
+     * Like {@link #decodeFrames(byte[], int, JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file     the JPEG XL file
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                 all frames together and to every layer) and the color
+     *                 space
+     * @return the frames in order
+     * @throws IOException              if the file cannot be read
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if the frames exceed the limits
+     * @throws JxlException             if the file is not a valid JPEG XL image
+     */
+    public static List<JxlFrame> decodeFrames(Path file, int channels, JxlSampleType type,
+            JxlDecodeOptions options) throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(options, "options");
+        checkChannels(channels);
+        try (Arena arena = Arena.ofConfined()) {
+            return collectFrames(NativeInput.read(file, arena), channels, type, options);
+        }
+    }
+
+    /** Decodes all frames of an image in native memory that outlives the call. */
+    private static List<JxlFrame> collectFrames(MemorySegment input, int channels, JxlSampleType type,
+            JxlDecodeOptions options) {
         List<JxlFrame> frames = new ArrayList<>();
-        try (JxlFrameDecoder decoder = JxlFrameDecoder.open(data, channels, type, options, true)) {
+        try (JxlFrameDecoder decoder = JxlFrameDecoder.open(input, false, channels, type, options, true)) {
             for (JxlFrame frame = decoder.next(); frame != null; frame = decoder.next()) {
                 frames.add(frame);
             }
@@ -585,11 +824,56 @@ public final class JxlDecoder {
      */
     public static JxlChannels decodeChannels(byte[] data, JxlSampleType type, JxlDecodeOptions options) {
         Objects.requireNonNull(data, "data");
+        return decodeChannels(MemorySegment.ofArray(data), type, options);
+    }
+
+    /**
+     * Like {@link #decodeChannels(byte[], JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG XL file
+     * @param type    the sample type to produce
+     * @param options the limits (only {@link JxlLimits#maxPixels()} applies)
+     *                and the color space
+     * @return the decoded image
+     * @throws IOException       if the file cannot be read
+     * @throws JxlLimitException if the image exceeds the limits
+     * @throws JxlException      if the file is not a valid JPEG XL image
+     */
+    public static JxlChannels decodeChannels(Path file, JxlSampleType type, JxlDecodeOptions options)
+            throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            return decodeChannels(NativeInput.read(file, arena), type, options);
+        }
+    }
+
+    /**
+     * Like {@link #decodeChannels(byte[], JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param data    the encoded image
+     * @param type    the sample type to produce
+     * @param options the limits (only {@link JxlLimits#maxPixels()} applies)
+     *                and the color space
+     * @return the decoded image
+     * @throws JxlLimitException if the image exceeds the limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
+     */
+    public static JxlChannels decodeChannels(MemorySegment data, JxlSampleType type, JxlDecodeOptions options) {
+        Objects.requireNonNull(data, "data");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(options, "options");
         JxlLimits limits = options.limits();
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment input = arena.allocateFrom(JAVA_BYTE, data);
+            MemorySegment input = NativeInput.of(data, arena);
             checkFrames(input, limits, 1, false, arena);
             try (NativeDecoder decoder = NativeDecoder.create()) {
                 MemorySegment handle = decoder.handle();

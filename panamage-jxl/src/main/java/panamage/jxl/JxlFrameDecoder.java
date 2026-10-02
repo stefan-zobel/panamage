@@ -1,9 +1,9 @@
 package panamage.jxl;
 
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
@@ -32,6 +32,11 @@ import panamage.jxl.ffi.JxlFrameHeader;
  * {@link JxlDecoder#decodeChannels(byte[], JxlSampleType)}.
  * <p>
  * The pixel limit applies to each frame and to every layer of all frames.
+ * <p>
+ * The encoded image is passed as a byte array or a {@link MemorySegment},
+ * which are copied, or as a file {@link Path}, which is read
+ * into native memory, not onto the Java heap. The decoder holds this copy, so
+ * it does not depend on the array, segment or file afterwards.
  * <p>
  * The decoder holds native memory and a thread pool until it is closed. Its
  * methods are synchronized: a call waits until a call in another thread has
@@ -130,8 +135,57 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * @throws JxlException             if the data is not a valid JPEG XL image
      */
     public static JxlFrameDecoder open(byte[] data, int channels, JxlSampleType type, JxlDecodeOptions options) {
+        Objects.requireNonNull(data, "data");
+        return open(MemorySegment.ofArray(data), channels, type, options);
+    }
+
+    /**
+     * Like {@link #open(byte[], int, JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a memory segment.
+     * The data is copied, so the segment need not stay alive while the
+     * decoder is open.
+     *
+     * @param data     the encoded image; it is copied
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                 each frame and to every layer) and the color space
+     * @return the decoder, positioned before the first frame
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if a frame or layer exceeds the limits
+     * @throws JxlException             if the data is not a valid JPEG XL image
+     */
+    public static JxlFrameDecoder open(MemorySegment data, int channels, JxlSampleType type,
+            JxlDecodeOptions options) {
         JxlDecoder.checkChannels(channels);
-        return open(data, channels, type, options, false);
+        return open(data, true, channels, type, options, false);
+    }
+
+    /**
+     * Like {@link #open(byte[], int, JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a file.
+     * The file is read into native memory, not onto the Java heap, which the
+     * decoder holds until it is closed; the file may be larger than 2 GiB.
+     *
+     * @param file     the JPEG XL file
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                 each frame and to every layer) and the color space
+     * @return the decoder, positioned before the first frame
+     * @throws IOException              if the file cannot be read
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if a frame or layer exceeds the limits
+     * @throws JxlException             if the file is not a valid JPEG XL image
+     */
+    public static JxlFrameDecoder open(Path file, int channels, JxlSampleType type, JxlDecodeOptions options)
+            throws IOException {
+        JxlDecoder.checkChannels(channels);
+        return openFile(file, channels, type, options);
     }
 
     /**
@@ -181,27 +235,102 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * @throws JxlException      if the data is not a valid JPEG XL image
      */
     public static JxlFrameDecoder openChannels(byte[] data, JxlSampleType type, JxlDecodeOptions options) {
-        return open(data, SEPARATE, type, options, false);
+        Objects.requireNonNull(data, "data");
+        return openChannels(MemorySegment.ofArray(data), type, options);
     }
 
     /**
-     * Opens the decoder; {@code channels} is 1 to 4, or {@link #SEPARATE}. With
-     * {@code allTogether}, the pixel limit also applies to all frames
-     * together, for callers that keep every frame.
+     * Like {@link #openChannels(byte[], JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a memory segment.
+     * The data is copied, so the segment need not stay alive while the
+     * decoder is open.
+     *
+     * @param data    the encoded image; it is copied
+     * @param type    the sample type to produce
+     * @param options the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                each frame and to every layer) and the color space
+     * @return the decoder, positioned before the first frame; use
+     *         {@link #nextChannels()} to decode the frames
+     * @throws JxlLimitException if a frame or layer exceeds the limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
      */
-    static JxlFrameDecoder open(byte[] data, int channels, JxlSampleType type, JxlDecodeOptions options,
-            boolean allTogether) {
+    public static JxlFrameDecoder openChannels(MemorySegment data, JxlSampleType type, JxlDecodeOptions options) {
+        return open(data, true, SEPARATE, type, options, false);
+    }
+
+    /**
+     * Like {@link #openChannels(byte[], JxlSampleType, JxlDecodeOptions)},
+     * reading the encoded image from a file.
+     * The file is read into native memory, not onto the Java heap, which the
+     * decoder holds until it is closed; the file may be larger than 2 GiB.
+     *
+     * @param file    the JPEG XL file
+     * @param type    the sample type to produce
+     * @param options the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                each frame and to every layer) and the color space
+     * @return the decoder, positioned before the first frame; use
+     *         {@link #nextChannels()} to decode the frames
+     * @throws IOException       if the file cannot be read
+     * @throws JxlLimitException if a frame or layer exceeds the limits
+     * @throws JxlException      if the file is not a valid JPEG XL image
+     */
+    public static JxlFrameDecoder openChannels(Path file, JxlSampleType type, JxlDecodeOptions options)
+            throws IOException {
+        return openFile(file, SEPARATE, type, options);
+    }
+
+    /** Opens a decoder for a file; {@code channels} is 1 to 4, or {@link #SEPARATE}. */
+    private static JxlFrameDecoder openFile(Path file, int channels, JxlSampleType type, JxlDecodeOptions options)
+            throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(options, "options");
+        Arena arena = Arena.ofShared();
+        MemorySegment input;
+        try {
+            input = NativeInput.read(file, arena);
+        } catch (IOException | RuntimeException | Error e) {
+            arena.close();
+            throw e;
+        }
+        return start(arena, input, channels, type, options, false);
+    }
+
+    /**
+     * Opens the decoder; {@code channels} is 1 to 4, or {@link #SEPARATE}.
+     * With {@code copy}, the data is copied, so the decoder does not depend on
+     * the segment; without, a native segment must stay alive until the
+     * decoder is closed. With {@code allTogether}, the pixel limit also
+     * applies to all frames together, for callers that keep every frame.
+     */
+    static JxlFrameDecoder open(MemorySegment data, boolean copy, int channels, JxlSampleType type,
+            JxlDecodeOptions options, boolean allTogether) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(options, "options");
-        JxlLimits limits = options.limits();
-        if (channels != SEPARATE) {
-            JxlDecoder.checkChannels(channels);
-        }
         Arena arena = Arena.ofShared();
+        MemorySegment input;
+        try {
+            input = copy ? NativeInput.copy(data, arena) : NativeInput.of(data, arena);
+        } catch (RuntimeException | Error e) {
+            arena.close();
+            throw e;
+        }
+        return start(arena, input, channels, type, options, allTogether);
+    }
+
+    /**
+     * Starts decoding the input; the decoder takes over the arena, which is
+     * closed if starting fails.
+     */
+    private static JxlFrameDecoder start(Arena arena, MemorySegment input, int channels, JxlSampleType type,
+            JxlDecodeOptions options, boolean allTogether) {
+        JxlLimits limits = options.limits();
         NativeDecoder decoder = null;
         try {
-            MemorySegment input = arena.allocateFrom(JAVA_BYTE, data);
+            if (channels != SEPARATE) {
+                JxlDecoder.checkChannels(channels);
+            }
             JxlDecoder.checkFrames(input, limits, Integer.MAX_VALUE, allTogether, arena);
             decoder = NativeDecoder.create();
             MemorySegment handle = decoder.handle();
