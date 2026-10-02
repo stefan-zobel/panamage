@@ -17,9 +17,11 @@ import panamage.jxl.JxlEncodeOptions;
  * <p>
  * The options are the compression (lossless, or lossy with a distance), the
  * effort and, for images with at least three channels, whether the first
- * three are stored as red, green and blue. In a macro:
+ * three are stored as red, green and blue. The effort is 3 unless chosen
+ * otherwise: for lossless compression, higher efforts make files only a few
+ * percent smaller, but take many times longer. In a macro:
  * <pre>
- * run("JPEG XL...", "compression=Lossless effort=7 save=/path/image.jxl");
+ * run("JPEG XL...", "compression=Lossless effort=3 save=/path/image.jxl");
  * run("JPEG XL...", "compression=Lossy distance=1.0 effort=7 store save=/path/photo.jxl");
  * </pre>
  */
@@ -31,6 +33,8 @@ public class SaveJxl implements PlugIn {
     private static final String PREF_COMPRESSION = "panamage.jxl.compression";
     private static final String PREF_DISTANCE = "panamage.jxl.distance";
     private static final String PREF_EFFORT = "panamage.jxl.effort";
+    /** The default effort: about as small as effort 7 for lossless files, and much faster. */
+    private static final int DEFAULT_EFFORT = 3;
 
     /** Creates the plugin; it is created by ImageJ. */
     public SaveJxl() {
@@ -49,7 +53,7 @@ public class SaveJxl implements PlugIn {
         dialog.addChoice("Compression", new String[] {LOSSLESS, LOSSY}, Prefs.get(PREF_COMPRESSION, LOSSLESS));
         dialog.addNumericField("Distance (lossy)", Prefs.get(PREF_DISTANCE, 1.0), 1);
         dialog.addSlider("Effort", JxlEncodeOptions.MIN_EFFORT, JxlEncodeOptions.MAX_EFFORT,
-                Prefs.get(PREF_EFFORT, JxlEncodeOptions.DEFAULT_EFFORT), 1);
+                Prefs.get(PREF_EFFORT, DEFAULT_EFFORT), 1);
         if (canStoreRgb) {
             dialog.addCheckbox("Store channels 1-3 as RGB color", false);
         }
