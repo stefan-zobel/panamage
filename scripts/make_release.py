@@ -2,7 +2,9 @@
 
 Builds the project with all tests (optionally also on Linux in WSL) and writes
 to dist/<version>/:
-  * the JARs of all modules
+  * the JARs of all modules, including panamage-jxl-jdk21 (built with the
+    profile jdk21, so the Maven toolchains file needs a JDK 21 as well as a
+    JDK 25; its sources are generated with the Python that runs this script)
   * panamage-<version>-<platform>.zip for windows-x86_64 and
     panamage-<version>-<platform>.tar.gz for linux-x86_64, linux-aarch64,
     linux-musl-x86_64, linux-musl-aarch64 and macos-aarch64, each with the
@@ -50,6 +52,9 @@ DIST_DIR = PROJECT_DIR / "dist"
 DRY_RUN_DIR = PROJECT_DIR / "target" / "release-dry-run"
 
 COMMON_MODULES = ["panamage-jxl-spi", "panamage-jxl", "panamage-jxl-imageio"]
+# Published with the other modules, but not part of the platform archives.
+JDK21_MODULE = "panamage-jxl-jdk21"
+TOOLCHAINS_FILE = Path.home() / ".m2" / "toolchains.xml"
 
 GROUP_ID = "net.sourceforge.streamsupport"
 PARENT_ARTIFACT = "panamage"
@@ -114,12 +119,27 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=PROJECT_DIR, check=True)
 
 
+def require_jdk21_toolchain() -> None:
+    """Fails before the long build if the toolchains file has no JDK 21 for panamage-jxl-jdk21."""
+    versions = set()
+    if TOOLCHAINS_FILE.is_file():
+        for toolchain in ET.parse(TOOLCHAINS_FILE).getroot().iter():
+            if toolchain.tag.rsplit("}", 1)[-1] != "toolchain":
+                continue
+            fields = {e.tag.rsplit("}", 1)[-1]: (e.text or "").strip() for e in toolchain.iter()}
+            if fields.get("type") == "jdk":
+                versions.add(fields.get("version"))
+    if "21" not in versions:
+        raise SystemExit(f"{TOOLCHAINS_FILE} has no JDK 21, which {JDK21_MODULE} is built with; add one, "
+                         "for example with write_toolchains.py --jdk JDK25_HOME --jdk21 JDK21_HOME")
+
+
 def build(wsl: bool) -> None:
     if wsl:
         # Runs the tests on Linux; the JARs are rebuilt on this machine afterwards.
         run([sys.executable, str(SCRIPTS_DIR / "wsl_verify.py")])
     wrapper = PROJECT_DIR / ("mvnw.cmd" if os.name == "nt" else "mvnw")
-    run([str(wrapper), "-B", "clean", "verify"])
+    run([str(wrapper), "-B", "-Pjdk21", f"-Dpython.executable={sys.executable}", "clean", "verify"])
 
 
 def module_jar(module: str, version: str, classifier: str = "") -> Path:
@@ -130,7 +150,7 @@ def module_jar(module: str, version: str, classifier: str = "") -> Path:
 
 
 def jar_modules() -> list[str]:
-    return COMMON_MODULES + [f"panamage-jxl-natives-{p}" for p in PLATFORMS]
+    return COMMON_MODULES + [f"panamage-jxl-natives-{p}" for p in PLATFORMS] + [JDK21_MODULE]
 
 
 def bundled_licenses(natives_jar: Path) -> dict[str, bytes]:
@@ -286,6 +306,7 @@ def main() -> int:
     # Fail before the long build if the bundle cannot be signed.
     gpg = gpg_command(args.gpg, args.gpg_key) if args.central else []
     if not args.skip_build:
+        require_jdk21_toolchain()
         build(args.wsl)
 
     dist = (DRY_RUN_DIR if args.dry_run else DIST_DIR) / version

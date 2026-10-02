@@ -69,6 +69,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # JDK 21 for panamage-jxl-jdk21; set up first, so that JAVA_HOME is the JDK 25.
+      - uses: actions/setup-java@v6
+        id: jdk21
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -89,17 +96,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/fetch_tools.py --build-only
 
-      - name: Register the JDK as Maven toolchain
-        run: python scripts/write_toolchains.py --jdk "${{ env.JAVA_HOME }}"
+      - name: Register the JDKs as Maven toolchains
+        run: python scripts/write_toolchains.py --jdk "${{ env.JAVA_HOME }}" --jdk21 "${{ steps.jdk21.outputs.path }}"
 
       - name: Build and test
         if: runner.os != 'Windows'
-        run: ./mvnw -B verify
+        run: ./mvnw -B -Pjdk21 verify
 
       - name: Build and test
         if: runner.os == 'Windows'
         shell: cmd
-        run: mvnw.cmd -B verify
+        run: mvnw.cmd -B -Pjdk21 verify
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -111,7 +118,8 @@ jobs:
   # Linux with musl (Alpine): the tests run in a container with a JDK for
   # Alpine, so the JVM itself uses musl and loads the musl libraries. A
   # container job cannot run the actions in Alpine, so the build runs in
-  # docker run; the downloads are made on the runner.
+  # docker run; the downloads are made on the runner. The container has only
+  # a JDK 25, so panamage-jxl-jdk21 (profile jdk21) is not built here.
   linux-musl:
     needs: select
     if: needs.select.outputs.musl == 'true'
