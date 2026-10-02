@@ -45,7 +45,7 @@ import panamage.jxl.ffi.JxlPixelFormat;
  * {@link #readAnimationInfo(byte[])} gives the number of frames and their
  * timing without decoding the pixels. Frames are returned as displayed:
  * libjxl combines frames without duration with the following frame, so every
- * frame covers the whole image.
+ * frame covers the whole image. {@link JxlFrameEncoder} writes animations.
  * <p>
  * Images and metadata boxes beyond the {@link JxlLimits} are rejected with a
  * {@link JxlLimitException} before their memory is allocated; the methods

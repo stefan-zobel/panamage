@@ -13,10 +13,13 @@ import javax.imageio.metadata.IIOMetadataFormatImpl;
  * not sRGB).
  * <p>
  * For a frame of an animation, the root also has an {@code Animation} element
- * (read only) with the attributes {@code frameIndex}, {@code durationMillis},
+ * with the attributes {@code frameIndex}, {@code durationMillis},
  * {@code durationTicks}, {@code ticksPerSecondNumerator},
  * {@code ticksPerSecondDenominator}, {@code loops} (0 plays the animation
- * forever) and {@code name} (empty if the frame has no name).
+ * forever) and {@code name} (empty if the frame has no name). When writing a
+ * sequence, {@code durationTicks}, the tick rate, {@code loops} and
+ * {@code name} can be set, each on its own; {@code frameIndex} and
+ * {@code durationMillis} are derived and ignored.
  */
 public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
 
@@ -45,13 +48,13 @@ public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
             addObjectValue(element, byte.class, 0, Integer.MAX_VALUE);
         }
         addElement(ANIMATION, NAME, CHILD_POLICY_EMPTY);
-        addAttribute(ANIMATION, FRAME_INDEX, DATATYPE_INTEGER, true, null);
-        addAttribute(ANIMATION, DURATION_MILLIS, DATATYPE_DOUBLE, true, null);
+        addAttribute(ANIMATION, FRAME_INDEX, DATATYPE_INTEGER, false, null);
+        addAttribute(ANIMATION, DURATION_MILLIS, DATATYPE_DOUBLE, false, null);
         for (String attribute : new String[] {DURATION_TICKS, TICKS_PER_SECOND_NUMERATOR,
                 TICKS_PER_SECOND_DENOMINATOR, LOOPS}) {
-            addAttribute(ANIMATION, attribute, DATATYPE_INTEGER, true, null);
+            addAttribute(ANIMATION, attribute, DATATYPE_INTEGER, false, null);
         }
-        addAttribute(ANIMATION, FRAME_NAME, DATATYPE_STRING, true, "");
+        addAttribute(ANIMATION, FRAME_NAME, DATATYPE_STRING, false, "");
     }
 
     /**

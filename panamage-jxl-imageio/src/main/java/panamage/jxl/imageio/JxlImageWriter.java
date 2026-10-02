@@ -14,13 +14,16 @@ import javax.imageio.metadata.IIOInvalidTreeException;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.stream.ImageOutputStream;
 
+import panamage.jxl.JxlAnimationHeader;
 import panamage.jxl.JxlEncoder;
 import panamage.jxl.JxlException;
+import panamage.jxl.JxlFrameEncoder;
+import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlMetadata;
 
 /**
- * Writes JPEG XL images with libjxl.
+ * Writes JPEG XL images and animations with libjxl.
  * <p>
  * Gray and RGB images with a {@link java.awt.image.ComponentColorModel} and
  * 8-bit, 16-bit or floating point samples (for example {@code TYPE_BYTE_GRAY},
@@ -37,12 +40,37 @@ import panamage.jxl.JxlMetadata;
  * orientation, so images read from JPEG files are displayed as intended.
  * Thumbnails are not written.
  * <p>
- * The encoded image is written to the output stream as it is produced. If
- * encoding fails, the stream may contain part of the image.
+ * An animation is written as a sequence: {@link #prepareWriteSequence},
+ * {@link #writeToSequence} for every frame and {@link #endWriteSequence}. The
+ * first image sets the size, the sample type and the color space of the
+ * animation, and every further image must match it after conversion. The
+ * first image also provides the tick rate and the loop count
+ * ({@link JxlImageMetadata#getAnimationHeader()}, by default 1000 ticks per
+ * second and played forever), the EXIF and XMP data and, through its write
+ * parameter, the compression of all frames; source region and subsampling
+ * apply to every frame. Each frame is shown for the duration of its
+ * {@link JxlImageMetadata#getFrameInfo()} in ticks, by default 100
+ * milliseconds; only the last frame may have a duration of 0. Metadata read
+ * from a JPEG XL animation carries these values, so {@code readAll} of every
+ * frame followed by {@code writeToSequence} keeps the timing.
+ * <p>
+ * The encoded data is written to the output stream as it is produced; a
+ * frame of a sequence is written when the next frame is added or the
+ * sequence is ended. If encoding fails, the stream may contain part of the
+ * image.
  *
  * @see JxlImageWriteParam
  */
 public final class JxlImageWriter extends ImageWriter {
+
+    /** The duration of a frame without frame information in its metadata. */
+    static final long DEFAULT_FRAME_MILLIS = 100;
+
+    private boolean sequenceStarted;
+    private ImageOutputStream sequenceOutput;
+    private JxlFrameEncoder sequence;
+    private JxlAnimationHeader sequenceHeader;
+    private int sequenceIndex;
 
     /**
      * Creates a writer; usually called through {@link JxlImageWriterSpi}.
@@ -89,7 +117,7 @@ public final class JxlImageWriter extends ImageWriter {
             return null;
         }
         if (inData instanceof JxlImageMetadata jxl) {
-            return new JxlImageMetadata(null, jxl.toJxlMetadata(), false);
+            return jxl.copyForWriting();
         }
         if (JpegMetadata.isSupported(inData)) {
             return new JxlImageMetadata(null, JpegMetadata.extract(inData), false);
@@ -106,11 +134,181 @@ public final class JxlImageWriter extends ImageWriter {
         return null;
     }
 
+    /**
+     * Writes a still image; the animation header and frame information of
+     * the metadata are ignored.
+     *
+     * @throws IllegalStateException if no output is set or a sequence is
+     *                               being written
+     */
     @Override
     public void write(IIOMetadata streamMetadata, IIOImage image, ImageWriteParam param) throws IOException {
+        if (sequenceStarted) {
+            throw new IllegalStateException("A sequence is being written; call endWriteSequence first");
+        }
+        ImageOutputStream output = requireOutput();
+        Frame frame = prepare(image, param, 0);
+        if (frame == null) {
+            return;
+        }
+        JxlMetadata metadata = frame.metadata() == null ? JxlMetadata.NONE : frame.metadata().toJxlMetadata();
+        try {
+            JxlEncoder.encode(frame.pixels(), JxlImageWriteParam.toOptions(param), metadata,
+                    new StreamAdapter(output));
+        } catch (JxlException e) {
+            throw new IIOException("Cannot encode JPEG XL image: " + e.getMessage(), e);
+        }
+        output.flush();
+        processImageProgress(100.0f);
+        processImageComplete();
+    }
+
+    /**
+     * Returns {@code true}: animations are written as sequences.
+     */
+    @Override
+    public boolean canWriteSequence() {
+        return true;
+    }
+
+    /**
+     * Starts an animation. Stream metadata is not supported and ignored with
+     * a warning.
+     *
+     * @throws IllegalStateException if no output is set or a sequence is
+     *                               already being written
+     */
+    @Override
+    public void prepareWriteSequence(IIOMetadata streamMetadata) throws IOException {
+        ImageOutputStream output = requireOutput();
+        if (sequenceStarted) {
+            throw new IllegalStateException("A sequence is already being written");
+        }
+        if (streamMetadata != null) {
+            processWarningOccurred(0, "Stream metadata is not written");
+        }
+        sequenceStarted = true;
+        sequenceOutput = output;
+        sequenceIndex = 0;
+    }
+
+    /**
+     * Adds a frame to the animation; the previous frame is encoded and
+     * written now. If the writer is aborted while the image is converted, the
+     * image is skipped and the sequence can be continued or ended. If
+     * encoding or writing fails, the sequence is closed and its output is
+     * incomplete.
+     *
+     * @throws IllegalStateException    if {@link #prepareWriteSequence} was
+     *                                  not called
+     * @throws IllegalArgumentException if the image does not match the first
+     *                                  image of the sequence or the previous
+     *                                  frame has a duration of 0; the sequence
+     *                                  is unchanged
+     */
+    @Override
+    public void writeToSequence(IIOImage image, ImageWriteParam param) throws IOException {
+        if (!sequenceStarted) {
+            throw new IllegalStateException("prepareWriteSequence was not called");
+        }
+        Frame frame = prepare(image, param, sequenceIndex);
+        if (frame == null) {
+            return;
+        }
+        JxlImageMetadata metadata = frame.metadata();
+        try {
+            if (sequence == null) {
+                JxlAnimationHeader header = metadata == null ? null : metadata.getAnimationHeader();
+                sequenceHeader = header == null ? JxlAnimationHeader.millis(0) : header;
+                sequence = JxlFrameEncoder.open(new StreamAdapter(sequenceOutput), sequenceHeader,
+                        JxlImageWriteParam.toOptions(param),
+                        metadata == null ? JxlMetadata.NONE : metadata.toJxlMetadata());
+            }
+            JxlFrameInfo info = metadata == null ? null : metadata.getFrameInfo();
+            long ticks = info == null ? defaultTicks(sequenceHeader) : info.durationTicks();
+            sequence.add(frame.pixels(), ticks, metadata == null ? "" : metadata.frameName());
+        } catch (JxlException e) {
+            closeSequence();
+            throw new IIOException("Cannot encode JPEG XL frame: " + e.getMessage(), e);
+        } catch (IOException e) {
+            closeSequence();
+            throw e;
+        }
+        processImageProgress(100.0f);
+        processImageComplete();
+        sequenceIndex++;
+    }
+
+    /**
+     * Encodes the last frame and completes the animation.
+     *
+     * @throws IllegalStateException if {@link #prepareWriteSequence} was not
+     *                               called
+     * @throws IIOException          if no image was written to the sequence or
+     *                               encoding fails
+     */
+    @Override
+    public void endWriteSequence() throws IOException {
+        if (!sequenceStarted) {
+            throw new IllegalStateException("prepareWriteSequence was not called");
+        }
+        ImageOutputStream output = sequenceOutput;
+        try {
+            if (sequence == null) {
+                throw new IIOException("No image was written to the sequence");
+            }
+            sequence.finish();
+        } catch (JxlException e) {
+            throw new IIOException("Cannot encode JPEG XL frame: " + e.getMessage(), e);
+        } finally {
+            closeSequence();
+        }
+        output.flush();
+    }
+
+    /**
+     * Sets the output; a sequence that is being written is abandoned, so its
+     * output is incomplete.
+     */
+    @Override
+    public void setOutput(Object output) {
+        closeSequence();
+        super.setOutput(output);
+    }
+
+    @Override
+    public void reset() {
+        closeSequence();
+        super.reset();
+    }
+
+    @Override
+    public void dispose() {
+        closeSequence();
+        super.dispose();
+    }
+
+    /** The default frame duration of 100 milliseconds in ticks of the header, at least 1. */
+    static long defaultTicks(JxlAnimationHeader header) {
+        double ticks = DEFAULT_FRAME_MILLIS / 1000.0 * header.ticksPerSecondNumerator()
+                / header.ticksPerSecondDenominator();
+        return Math.max(1, Math.round(ticks));
+    }
+
+    private ImageOutputStream requireOutput() {
         if (!(getOutput() instanceof ImageOutputStream output)) {
             throw new IllegalStateException("No output set");
         }
+        return output;
+    }
+
+    /**
+     * Checks the image, converts its metadata and pixels and reports the start
+     * of the image to the listeners.
+     *
+     * @return the frame, or {@code null} if the writer was aborted
+     */
+    private Frame prepare(IIOImage image, ImageWriteParam param, int index) {
         if (image == null) {
             throw new IllegalArgumentException("image is null");
         }
@@ -118,16 +316,16 @@ public final class JxlImageWriter extends ImageWriter {
             throw new UnsupportedOperationException("Writing rasters is not supported");
         }
         if (image.getNumThumbnails() > 0) {
-            processWarningOccurred(0, "Thumbnails are not written");
+            processWarningOccurred(index, "Thumbnails are not written");
         }
-        JxlMetadata metadata = JxlMetadata.NONE;
+        JxlImageMetadata metadata = null;
         if (convertImageMetadata(image.getMetadata(), null, param) instanceof JxlImageMetadata converted) {
-            metadata = converted.toJxlMetadata();
+            metadata = converted;
         } else if (image.getMetadata() != null) {
-            processWarningOccurred(0, "Unsupported image metadata is not written");
+            processWarningOccurred(index, "Unsupported image metadata is not written");
         }
         clearAbortRequest();
-        processImageStarted(0);
+        processImageStarted(index);
 
         RenderedImage source = image.getRenderedImage();
         if (param != null && source instanceof BufferedImage buffered) {
@@ -136,17 +334,24 @@ public final class JxlImageWriter extends ImageWriter {
         JxlImage pixels = BufferedImages.toJxlImage(source);
         if (abortRequested()) {
             processWriteAborted();
-            return;
+            return null;
         }
+        return new Frame(pixels, metadata);
+    }
 
-        try {
-            JxlEncoder.encode(pixels, JxlImageWriteParam.toOptions(param), metadata, new StreamAdapter(output));
-        } catch (JxlException e) {
-            throw new IIOException("Cannot encode JPEG XL image: " + e.getMessage(), e);
+    private void closeSequence() {
+        if (sequence != null) {
+            sequence.close();
         }
-        output.flush();
-        processImageProgress(100.0f);
-        processImageComplete();
+        sequence = null;
+        sequenceHeader = null;
+        sequenceOutput = null;
+        sequenceStarted = false;
+        sequenceIndex = 0;
+    }
+
+    /** The converted pixels and metadata of an image. */
+    private record Frame(JxlImage pixels, JxlImageMetadata metadata) {
     }
 
     /** Lets the encoder write directly to the image output stream; closing it has no effect. */

@@ -10,6 +10,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Objects;
 
 import panamage.jxl.ffi.Jxl;
@@ -29,6 +30,9 @@ import panamage.jxl.ffi.JxlPixelFormat;
  * returned as a byte array or written to an {@link OutputStream} or a
  * {@link WritableByteChannel} as it is produced. The encoder uses libjxl's
  * native thread pool, so no Java code is called back from native threads.
+ * <p>
+ * {@link #encodeAnimation} encodes a list of frames as an animation, and
+ * {@link JxlFrameEncoder} encodes animations one frame at a time.
  */
 public final class JxlEncoder {
 
@@ -126,6 +130,52 @@ public final class JxlEncoder {
     }
 
     /**
+     * Encodes frames as an animation, for example the frames of
+     * {@link JxlDecoder#decodeFrames(byte[], int, JxlSampleType)} with the
+     * tick rate and loop count of {@link JxlDecoder#readAnimationInfo(byte[])}.
+     * <p>
+     * Each frame is shown for its duration in ticks and keeps its name; the
+     * duration in milliseconds is ignored. All frames must have the size, the
+     * channels, the sample type and the ICC profile of the first frame, and
+     * only the last frame may have a duration of 0. Every frame covers the
+     * whole image. With metadata, the output uses the JPEG XL container
+     * format. To write the output piece by piece, or to add frames one at a
+     * time, use {@link JxlFrameEncoder}.
+     *
+     * @param frames   the frames in display order, at least one
+     * @param header   the tick rate and the number of loops
+     * @param options  the encoder settings for all frames
+     * @param metadata the EXIF and XMP metadata to store
+     * @return the JPEG XL file
+     * @throws NullPointerException     if an argument or a frame is {@code null}
+     * @throws IllegalArgumentException if there is no frame, a frame does not
+     *                                  match the first, a duration or name is
+     *                                  invalid, or a frame other than the last
+     *                                  has a duration of 0
+     * @throws JxlException             if libjxl rejects a frame, the settings
+     *                                  or the metadata
+     */
+    public static byte[] encodeAnimation(List<JxlFrame> frames, JxlAnimationHeader header, JxlEncodeOptions options,
+            JxlMetadata metadata) {
+        Objects.requireNonNull(frames, "frames");
+        Objects.requireNonNull(header, "header");
+        Objects.requireNonNull(options, "options");
+        Objects.requireNonNull(metadata, "metadata");
+        if (frames.isEmpty()) {
+            throw new IllegalArgumentException("At least one frame is needed");
+        }
+        return OutputSink.toBytes(sink -> {
+            try (JxlFrameEncoder encoder = JxlFrameEncoder.open(sink, header, options, metadata,
+                    NativeEncoder.OUTPUT_CHUNK_SIZE)) {
+                for (JxlFrame frame : frames) {
+                    encoder.add(frame);
+                }
+                encoder.finish();
+            }
+        });
+    }
+
+    /**
      * Encodes an image to a sink, with a given output buffer size (tests use a
      * small size to exercise the multi-chunk path).
      */
@@ -142,8 +192,11 @@ public final class JxlEncoder {
                 encoder.check(Jxl.JxlEncoderUseContainer(encoder.handle(), Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
                 encoder.check(Jxl.JxlEncoderUseBoxes(encoder.handle()), "JxlEncoderUseBoxes");
             }
-            configure(encoder, image, options, metadata.orientation(), arena);
-            addFrame(encoder, image, options, arena);
+            configure(encoder, image, options, metadata.orientation(), null, arena);
+            MemorySegment settings = createFrameSettings(encoder, options);
+            MemorySegment pixels = copyPixels(image, arena);
+            encoder.check(Jxl.JxlEncoderAddImageFrame(settings, pixelFormat(image, arena), pixels,
+                    pixels.byteSize()), "JxlEncoderAddImageFrame");
             addBoxes(encoder, metadata, arena);
             // Closes the frames and, if used, the boxes.
             Jxl.JxlEncoderCloseInput(encoder.handle());
@@ -151,7 +204,8 @@ public final class JxlEncoder {
         }
     }
 
-    private static void addBoxes(NativeEncoder encoder, JxlMetadata metadata, Arena arena) {
+    /** Adds the EXIF and XMP boxes; the encoder must use boxes if there is metadata. */
+    static void addBoxes(NativeEncoder encoder, JxlMetadata metadata, Arena arena) {
         if (metadata.exif() != null) {
             // The Exif box starts with the offset of the TIFF header, which follows directly.
             byte[] content = new byte[4 + metadata.exif().length];
@@ -170,8 +224,12 @@ public final class JxlEncoder {
                 Jxl.JXL_TRUE()), "JxlEncoderAddBox(" + type.strip() + ")");
     }
 
-    private static void configure(NativeEncoder encoder, JxlImage image, JxlEncodeOptions options, int orientation,
-            Arena arena) {
+    /**
+     * Sets the basic information and the color encoding of the image; with an
+     * animation header, the image is an animation.
+     */
+    static void configure(NativeEncoder encoder, JxlImage image, JxlEncodeOptions options, int orientation,
+            JxlAnimationHeader animation, Arena arena) {
         boolean gray = image.channels() <= 2;
         boolean alpha = image.channels() == 2 || image.channels() == 4;
 
@@ -189,6 +247,15 @@ public final class JxlEncoder {
         JxlBasicInfo.orientation(info, orientation);
         // Lossless encoding must keep the original color space instead of converting to XYB.
         JxlBasicInfo.uses_original_profile(info, options.lossless() ? Jxl.JXL_TRUE() : Jxl.JXL_FALSE());
+        if (animation != null) {
+            JxlBasicInfo.have_animation(info, Jxl.JXL_TRUE());
+            MemorySegment header = JxlBasicInfo.animation(info);
+            // The values are uint32 in C; JxlAnimationHeader keeps them in that range.
+            panamage.jxl.ffi.JxlAnimationHeader.tps_numerator(header, (int) animation.ticksPerSecondNumerator());
+            panamage.jxl.ffi.JxlAnimationHeader.tps_denominator(header,
+                    (int) animation.ticksPerSecondDenominator());
+            panamage.jxl.ffi.JxlAnimationHeader.num_loops(header, (int) animation.loops());
+        }
         encoder.check(Jxl.JxlEncoderSetBasicInfo(encoder.handle(), info), "JxlEncoderSetBasicInfo");
 
         if (image.iccProfile() != null) {
@@ -202,7 +269,11 @@ public final class JxlEncoder {
         }
     }
 
-    private static void addFrame(NativeEncoder encoder, JxlImage image, JxlEncodeOptions options, Arena arena) {
+    /**
+     * Creates frame settings with the effort and the lossless or lossy mode of
+     * the options.
+     */
+    static MemorySegment createFrameSettings(NativeEncoder encoder, JxlEncodeOptions options) {
         MemorySegment settings = encoder.createFrameSettings(options.effort());
         if (options.lossless()) {
             encoder.check(Jxl.JxlEncoderSetFrameLossless(settings, Jxl.JXL_TRUE()), "JxlEncoderSetFrameLossless");
@@ -210,19 +281,25 @@ public final class JxlEncoder {
             encoder.check(Jxl.JxlEncoderSetFrameDistance(settings, options.distance()),
                     "JxlEncoderSetFrameDistance");
         }
+        return settings;
+    }
 
+    /** Describes the interleaved samples of the image for libjxl. */
+    static MemorySegment pixelFormat(JxlImage image, Arena arena) {
         MemorySegment format = arena.allocate(JxlPixelFormat.layout());
         JxlPixelFormat.num_channels(format, image.channels());
         JxlPixelFormat.data_type(format, image.sampleType().dataType());
         JxlPixelFormat.endianness(format, Jxl.JXL_NATIVE_ENDIAN());
         JxlPixelFormat.align(format, 0L);
+        return format;
+    }
 
-        MemorySegment pixels = switch (image) {
+    /** Copies the samples of the image to native memory. */
+    static MemorySegment copyPixels(JxlImage image, Arena arena) {
+        return switch (image) {
             case JxlImage.Uint8 img -> arena.allocateFrom(JAVA_BYTE, img.pixels());
             case JxlImage.Uint16 img -> arena.allocateFrom(JAVA_SHORT, img.pixels());
             case JxlImage.Float32 img -> arena.allocateFrom(JAVA_FLOAT, img.pixels());
         };
-        encoder.check(Jxl.JxlEncoderAddImageFrame(settings, format, pixels, pixels.byteSize()),
-                "JxlEncoderAddImageFrame");
     }
 }

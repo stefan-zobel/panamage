@@ -93,9 +93,10 @@ final class NativeEncoder implements AutoCloseable {
     }
 
     /**
-     * Runs the encoder until all input is encoded and writes the output to the
-     * sink, one buffer of the given size at a time. The input must have been
-     * closed with {@code JxlEncoderCloseInput}.
+     * Runs the encoder until all input added so far is encoded and writes the
+     * output to the sink, one buffer of the given size at a time. Before
+     * {@code JxlEncoderCloseInput}, libjxl encodes the queued frames as not
+     * being the last one; afterwards, it also finishes the file.
      *
      * @return the number of bytes written
      * @throws IOException  if the sink fails
