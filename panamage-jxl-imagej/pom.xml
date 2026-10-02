@@ -1,0 +1,163 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>net.sourceforge.streamsupport</groupId>
+		<artifactId>panamage</artifactId>
+		<version>0.2.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>panamage-jxl-imagej</artifactId>
+	<name>panamage-jxl-imagej</name>
+	<description>JPEG XL for ImageJ and Fiji, based on panamage-jxl-jdk21 (runs only on JDK 21, with --enable-preview)</description>
+
+	<!-- Built with the profile jdk21 (-Pjdk21), like panamage-jxl-jdk21. ImageJ, ImgLib2 and
+	     SciJava are provided by Fiji; the versions are those of the Fiji release this module is
+	     tested with. -->
+
+	<properties>
+		<!-- The classes of panamage-jxl-jdk21 use preview features, so this module is compiled
+		     with the compiler of exactly this release. -->
+		<maven.compiler.release>21</maven.compiler.release>
+		<toolchain.jdk.version>21</toolchain.jdk.version>
+		<ij.version>1.54p</ij.version>
+		<imagej-common.version>2.1.1</imagej-common.version>
+		<imglib2.version>8.0.0</imglib2.version>
+		<scijava-common.version>2.101.0</scijava-common.version>
+	</properties>
+
+	<!-- imagej-common is published only to the SciJava repository, not to Maven Central. -->
+	<repositories>
+		<repository>
+			<id>scijava.releases</id>
+			<url>https://maven.scijava.org/content/repositories/releases</url>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
+
+	<dependencies>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-jdk21</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>ij</artifactId>
+			<version>${ij.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>imagej-common</artifactId>
+			<version>${imagej-common.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2</artifactId>
+			<version>${imglib2.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.scijava</groupId>
+			<artifactId>scijava-common</artifactId>
+			<version>${scijava-common.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-aarch64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-musl-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-musl-aarch64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-macos-aarch64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<!-- Needed to compile against the classes of panamage-jxl-jdk21. The classes of
+					     this module use no preview feature themselves, so they stay loadable without
+					     enable-preview and can report a clear error instead. -->
+					<compilerArgs>
+						<arg>--enable-preview</arg>
+						<arg>-Xlint:-preview</arg>
+					</compilerArgs>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<configuration>
+					<additionalOptions combine.self="override">
+						<additionalOption>--enable-preview</additionalOption>
+					</additionalOptions>
+					<!-- As in panamage-jxl-jdk21: the javadoc of the JDK 21 toolchain does not know
+					     the option no-fonts. -->
+					<disableNoFonts>true</disableNoFonts>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Fail fast instead of blocking the build if a native call loops. -->
+					<forkedProcessTimeoutInSeconds>300</forkedProcessTimeoutInSeconds>
+					<useModulePath>false</useModulePath>
+					<argLine>--enable-preview --enable-native-access=ALL-UNNAMED</argLine>
+					<systemPropertyVariables>
+						<!-- Keep extracted libraries out of the global temp directory. -->
+						<panamage.jxl.cache.dir>${project.build.directory}/native-cache</panamage.jxl.cache.dir>
+						<java.awt.headless>true</java.awt.headless>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>
