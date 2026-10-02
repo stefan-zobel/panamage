@@ -69,7 +69,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # JDK 21 for panamage-jxl-jdk21; set up first, so that JAVA_HOME is the JDK 25.
+      # JDK 8 for the tests that check that the Image I/O plugin stays out of the
+      # way on Java 8; they are skipped on the other platforms. Set up before the
+      # JDK 25, like the JDK 21.
+      - uses: actions/setup-java@v6
+        id: jdk8
+        if: matrix.name == 'linux'
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      # JDK 21 for panamage-jxl-jdk21 and the tests of the Image I/O plugin on it;
+      # set up first, so that JAVA_HOME is the JDK 25.
       - uses: actions/setup-java@v6
         id: jdk21
         with:
@@ -101,12 +112,12 @@ jobs:
 
       - name: Build and test
         if: runner.os != 'Windows'
-        run: ./mvnw -B -Pjdk21 verify
+        run: ./mvnw -B -Pjdk21 "-Djdk8.home=${{ steps.jdk8.outputs.path }}" "-Djdk21.home=${{ steps.jdk21.outputs.path }}" verify
 
       - name: Build and test
         if: runner.os == 'Windows'
         shell: cmd
-        run: mvnw.cmd -B -Pjdk21 verify
+        run: mvnw.cmd -B -Pjdk21 "-Djdk8.home=${{ steps.jdk8.outputs.path }}" "-Djdk21.home=${{ steps.jdk21.outputs.path }}" verify
 
       - uses: actions/upload-artifact@v7
         if: always()

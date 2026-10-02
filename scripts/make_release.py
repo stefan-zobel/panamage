@@ -4,7 +4,10 @@ Builds the project with all tests (optionally also on Linux in WSL) and writes
 to dist/<version>/:
   * the JARs of all modules, including panamage-jxl-jdk21 (built with the
     profile jdk21, so the Maven toolchains file needs a JDK 21 as well as a
-    JDK 25; its sources are generated with the Python that runs this script)
+    JDK 25; its sources are generated with the Python that runs this script;
+    a JDK 8 in the toolchains file is used by the tests that check that the
+    Image I/O plugin stays out of the way on Java 8, which are skipped
+    without it)
   * panamage-<version>-<platform>.zip for windows-x86_64 and
     panamage-<version>-<platform>.tar.gz for linux-x86_64, linux-aarch64,
     linux-musl-x86_64, linux-musl-aarch64 and macos-aarch64, each with the
@@ -119,27 +122,45 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=PROJECT_DIR, check=True)
 
 
-def require_jdk21_toolchain() -> None:
-    """Fails before the long build if the toolchains file has no JDK 21 for panamage-jxl-jdk21."""
-    versions = set()
+def toolchain_jdk_homes() -> dict[str, str]:
+    """Returns the home directories of the JDKs in the toolchains file by their version."""
+    homes = {}
     if TOOLCHAINS_FILE.is_file():
         for toolchain in ET.parse(TOOLCHAINS_FILE).getroot().iter():
             if toolchain.tag.rsplit("}", 1)[-1] != "toolchain":
                 continue
             fields = {e.tag.rsplit("}", 1)[-1]: (e.text or "").strip() for e in toolchain.iter()}
-            if fields.get("type") == "jdk":
-                versions.add(fields.get("version"))
-    if "21" not in versions:
+            if fields.get("type") == "jdk" and fields.get("version"):
+                homes.setdefault(fields["version"], fields.get("jdkHome", ""))
+    return homes
+
+
+def jdk_test_properties() -> list[str]:
+    """Returns the Maven properties with the JDK 8 and JDK 21 for the tests of the Image I/O plugin.
+
+    Fails before the long build if the toolchains file has no JDK 21, which
+    panamage-jxl-jdk21 is built with. Without a JDK 8, the tests that check
+    that the plugin stays out of the way on Java 8 are skipped.
+    """
+    homes = toolchain_jdk_homes()
+    jdk21 = homes.get("21")
+    if not jdk21:
         raise SystemExit(f"{TOOLCHAINS_FILE} has no JDK 21, which {JDK21_MODULE} is built with; add one, "
                          "for example with write_toolchains.py --jdk JDK25_HOME --jdk21 JDK21_HOME")
+    jdk8 = homes.get("8") or homes.get("1.8")
+    if not jdk8:
+        print(f"Note: {TOOLCHAINS_FILE} has no JDK 8 (version 8 or 1.8), so the tests of the Image I/O "
+              "plugin on Java 8 are skipped.", flush=True)
+    return [f"-Djdk8.home={jdk8 or ''}", f"-Djdk21.home={jdk21}"]
 
 
-def build(wsl: bool) -> None:
+def build(wsl: bool, jdk_properties: list[str]) -> None:
     if wsl:
         # Runs the tests on Linux; the JARs are rebuilt on this machine afterwards.
         run([sys.executable, str(SCRIPTS_DIR / "wsl_verify.py")])
     wrapper = PROJECT_DIR / ("mvnw.cmd" if os.name == "nt" else "mvnw")
-    run([str(wrapper), "-B", "-Pjdk21", f"-Dpython.executable={sys.executable}", "clean", "verify"])
+    run([str(wrapper), "-B", "-Pjdk21", f"-Dpython.executable={sys.executable}", *jdk_properties,
+         "clean", "verify"])
 
 
 def module_jar(module: str, version: str, classifier: str = "") -> Path:
@@ -306,8 +327,7 @@ def main() -> int:
     # Fail before the long build if the bundle cannot be signed.
     gpg = gpg_command(args.gpg, args.gpg_key) if args.central else []
     if not args.skip_build:
-        require_jdk21_toolchain()
-        build(args.wsl)
+        build(args.wsl, jdk_test_properties())
 
     dist = (DRY_RUN_DIR if args.dry_run else DIST_DIR) / version
     if dist.exists():
