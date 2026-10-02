@@ -75,6 +75,19 @@ class ImagePlusConverterTest {
     }
 
     @Test
+    void rgbImageWithAlphaBecomesColorImageWithoutAlpha() {
+        byte[] red = TestPlanes.uint8(1);
+        JxlChannels image = JxlChannels.builder(WIDTH, HEIGHT).rgb(red, TestPlanes.uint8(2), TestPlanes.uint8(3))
+                .add(JxlExtraChannel.alpha(), TestPlanes.uint8(4)).build();
+
+        ImagePlus imp = ImagePlusConverter.toImagePlus("photo", image);
+
+        assertEquals(ImagePlus.COLOR_RGB, imp.getType());
+        assertEquals(1, imp.getStackSize());
+        assertEquals(red[7 * WIDTH + 5] & 0xFF, imp.getPixel(5, 7)[0]);
+    }
+
+    @Test
     void extraChannelsBecomeChannelsOfACompositeImage() {
         short[] dapi = TestPlanes.uint16(1);
         short[] gfp = TestPlanes.uint16(2);

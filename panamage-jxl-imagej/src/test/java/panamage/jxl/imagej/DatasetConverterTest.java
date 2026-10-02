@@ -24,6 +24,7 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 import panamage.jxl.JxlChannels;
+import panamage.jxl.JxlExtraChannel;
 
 class DatasetConverterTest {
 
@@ -107,6 +108,19 @@ class DatasetConverterTest {
         assertEquals(8, dataset.getType().getBitsPerPixel());
         assertNull(dataset.getImgPlus().getColorTable(0));
         assertEquals(red[2 * WIDTH + 1] & 0xFF, sample(dataset.getImgPlus(), 1, 2, 0), 0);
+    }
+
+    @Test
+    void rgbImageWithAlphaBecomesMergedDatasetWithoutAlpha() {
+        JxlChannels image = JxlChannels.builder(WIDTH, HEIGHT)
+                .rgb(TestPlanes.uint8(1), TestPlanes.uint8(2), TestPlanes.uint8(3))
+                .add(JxlExtraChannel.alpha(), TestPlanes.uint8(4)).build();
+
+        Dataset dataset = DatasetConverter.toDataset(context.service(DatasetService.class), "photo", image);
+
+        assertTrue(dataset.isRGBMerged());
+        assertEquals(3, dataset.dimension(2));
+        assertEquals(3, dataset.getCompositeChannelCount());
     }
 
     @Test

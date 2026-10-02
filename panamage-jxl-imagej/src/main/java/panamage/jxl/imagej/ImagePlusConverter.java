@@ -24,7 +24,8 @@ import panamage.jxl.JxlExtraChannel;
  * color channels first; images with several channels are shown as a
  * {@link CompositeImage}, with red, green and blue for the color channels of
  * a 16-bit or floating point color image. 8-bit red, green and blue without
- * extra channels become an RGB color image. In the other direction, the first
+ * extra channels, or with only alpha, become an RGB color image without the
+ * alpha channel, as ImageJ opens PNG images. In the other direction, the first
  * channel of an ImageJ image becomes the gray color channel of the JPEG XL
  * image and every further channel an extra channel, so that no color
  * transform touches the data, unless the first three channels are stored as
@@ -41,7 +42,8 @@ public final class ImagePlusConverter {
     /**
      * Converts a JPEG XL image to an ImageJ image with one slice and one
      * frame: 8-bit, 16-bit or 32-bit depending on the sample type, and an RGB
-     * color image for 8-bit red, green and blue without extra channels.
+     * color image for 8-bit red, green and blue without extra channels or with
+     * only alpha, which is left out.
      *
      * @param title the title of the image
      * @param image the JPEG XL image

@@ -24,11 +24,13 @@
 		<toolchain.jdk.version>21</toolchain.jdk.version>
 		<ij.version>1.54p</ij.version>
 		<imagej-common.version>2.1.1</imagej-common.version>
+		<imagej-legacy.version>3.0.0</imagej-legacy.version>
 		<imglib2.version>8.0.0</imglib2.version>
 		<scijava-common.version>2.101.0</scijava-common.version>
 	</properties>
 
-	<!-- imagej-common is published only to the SciJava repository, not to Maven Central. -->
+	<!-- imagej-common and imagej-legacy are published only to the SciJava repository, not to
+	     Maven Central. -->
 	<repositories>
 		<repository>
 			<id>scijava.releases</id>
@@ -55,6 +57,19 @@
 			<artifactId>imagej-common</artifactId>
 			<version>${imagej-common.version}</version>
 			<scope>provided</scope>
+		</dependency>
+		<!-- Only for the interface LegacyOpener; its many dependencies are not needed. -->
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>imagej-legacy</artifactId>
+			<version>${imagej-legacy.version}</version>
+			<scope>provided</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
@@ -118,6 +133,10 @@
 						<arg>--enable-preview</arg>
 						<arg>-Xlint:-preview</arg>
 					</compilerArgs>
+					<!-- Writes the index of the SciJava plugins, META-INF/json/org.scijava.plugin.Plugin. -->
+					<annotationProcessors>
+						<annotationProcessor>org.scijava.annotations.AnnotationProcessor</annotationProcessor>
+					</annotationProcessors>
 				</configuration>
 			</plugin>
 			<plugin>

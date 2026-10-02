@@ -2,8 +2,10 @@ package panamage.jxl.imagej;
 
 import java.util.List;
 
+import panamage.jxl.JxlChannelType;
 import panamage.jxl.JxlChannels;
 import panamage.jxl.JxlDecoder;
+import panamage.jxl.JxlExtraChannel;
 import panamage.jxl.JxlExtraChannelInfo;
 import panamage.jxl.JxlImageInfo;
 import panamage.jxl.JxlSampleType;
@@ -15,7 +17,8 @@ import panamage.jxl.JxlSampleType;
  * <p>
  * Every channel of a JPEG XL image becomes a channel of the ImageJ image, the
  * color channels first, with one exception: 8-bit red, green and blue without
- * extra channels become an RGB color image, as ImageJ shows photographs.
+ * other extra channels than alpha become an RGB color image, as ImageJ shows
+ * photographs; like ImageJ's PNG opener, it leaves out the alpha channel.
  */
 final class ChannelLayout {
 
@@ -27,11 +30,13 @@ final class ChannelLayout {
      *
      * @param image the image
      * @return {@code true} for 8-bit red, green and blue without extra
-     *         channels
+     *         channels, or with only an alpha channel, which the RGB color
+     *         image leaves out
      */
     static boolean isRgb(JxlChannels image) {
+        List<JxlExtraChannel> extra = image.extraChannels();
         return image.sampleType() == JxlSampleType.UINT8 && image.colorChannels() == 3
-                && image.extraChannels().isEmpty();
+                && (extra.isEmpty() || extra.size() == 1 && extra.get(0).type() == JxlChannelType.ALPHA);
     }
 
     /**

@@ -20,13 +20,17 @@ class ChannelLayoutTest {
     private static final int HEIGHT = TestPlanes.HEIGHT;
 
     @Test
-    void onlyEightBitRedGreenAndBlueWithoutExtraChannelsIsRgb() {
+    void eightBitRedGreenAndBlueWithAtMostAlphaIsRgb() {
         byte[] r = TestPlanes.uint8(1);
         byte[] g = TestPlanes.uint8(2);
         byte[] b = TestPlanes.uint8(3);
         assertTrue(ChannelLayout.isRgb(JxlChannels.builder(WIDTH, HEIGHT).rgb(r, g, b).build()));
-        assertFalse(ChannelLayout.isRgb(
+        assertTrue(ChannelLayout.isRgb(
                 JxlChannels.builder(WIDTH, HEIGHT).rgb(r, g, b).add(JxlExtraChannel.alpha(), r).build()));
+        assertFalse(ChannelLayout.isRgb(
+                JxlChannels.builder(WIDTH, HEIGHT).rgb(r, g, b).add("depth", r).build()));
+        assertFalse(ChannelLayout.isRgb(JxlChannels.builder(WIDTH, HEIGHT).rgb(r, g, b)
+                .add(JxlExtraChannel.alpha(), r).add(JxlExtraChannel.alpha(), g).build()));
         assertFalse(ChannelLayout.isRgb(JxlChannels.builder(WIDTH, HEIGHT).gray(r).build()));
         assertFalse(ChannelLayout.isRgb(JxlChannels.builder(WIDTH, HEIGHT)
                 .rgb(TestPlanes.uint16(1), TestPlanes.uint16(2), TestPlanes.uint16(3)).build()));

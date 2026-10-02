@@ -34,7 +34,8 @@ import panamage.jxl.JxlChannels;
  * every channel of the JPEG XL image becomes a channel, the color channels
  * first, with red, green and blue color tables for the color channels of a
  * 16-bit or floating point color image; 8-bit red, green and blue without
- * extra channels become a Dataset merged to RGB.
+ * extra channels, or with only alpha, become a Dataset merged to RGB without
+ * the alpha channel.
  * <p>
  * The images have the axes X and Y, followed by CHANNEL, Z and TIME where
  * there is more than one channel, slice or time point. The pixel arrays are
@@ -70,7 +71,7 @@ public final class DatasetConverter {
      * @param name     the name of the image
      * @param image    the JPEG XL image
      * @return the Dataset, merged to RGB for 8-bit red, green and blue without
-     *         extra channels
+     *         extra channels or with only alpha
      */
     public static Dataset toDataset(DatasetService datasets, String name, JxlChannels image) {
         Objects.requireNonNull(image, "image");
@@ -152,7 +153,8 @@ public final class DatasetConverter {
     private static ImgPlus<UnsignedByteType> uint8(String name, List<JxlChannels> positions,
             StackMetadata metadata) {
         List<byte[]> planes = new ArrayList<>();
-        positions.forEach(image -> planes.addAll(((JxlChannels.Uint8) image).planes()));
+        int channels = channels(positions.get(0), metadata);
+        positions.forEach(image -> planes.addAll(((JxlChannels.Uint8) image).planes().subList(0, channels)));
         return toImgPlus(name, positions.get(0), metadata, PlanarImgs.unsignedBytes(dimensions(positions, metadata)),
                 planes, ByteArray::new);
     }
@@ -179,7 +181,7 @@ public final class DatasetConverter {
         for (int i = 0; i < planes.size(); i++) {
             img.setPlane(i, access.apply(planes.get(i)));
         }
-        int channels = first.channels();
+        int channels = channels(first, metadata);
         ImgPlus<T> imgPlus = new ImgPlus<>(img, name, axes(metadata, channels));
         if (channels > 1) {
             imgPlus.setCompositeChannelCount(channels);
@@ -206,10 +208,15 @@ public final class DatasetConverter {
         return imgPlus;
     }
 
+    /** The channels of the Dataset: red, green and blue without alpha for RGB, otherwise all. */
+    private static int channels(JxlChannels first, StackMetadata metadata) {
+        return metadata.rgb() ? 3 : first.channels();
+    }
+
     private static long[] dimensions(List<JxlChannels> positions, StackMetadata metadata) {
         JxlChannels first = positions.get(0);
         List<Long> dimensions = new ArrayList<>(List.of((long) first.width(), (long) first.height()));
-        for (int size : new int[] {first.channels(), metadata.slices(), metadata.frames()}) {
+        for (int size : new int[] {channels(first, metadata), metadata.slices(), metadata.frames()}) {
             if (size > 1) {
                 dimensions.add((long) size);
             }
