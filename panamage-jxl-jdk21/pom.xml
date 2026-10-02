@@ -137,6 +137,9 @@
 					<additionalOptions combine.self="override">
 						<additionalOption>--enable-preview</additionalOption>
 					</additionalOptions>
+					<!-- The plugin adds the option no-fonts when the JDK that runs Maven is 23 or
+					     newer, even though the javadoc of the JDK 21 toolchain does not know it. -->
+					<disableNoFonts>true</disableNoFonts>
 				</configuration>
 			</plugin>
 			<plugin>
