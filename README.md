@@ -13,19 +13,20 @@ JPEG XL and back, reads and writes EXIF and XMP metadata, and plugs into
 `ImageIO.write(image, "jxl", ...)` without changes. The native libraries are
 bundled; nothing needs to be installed.
 
-> **Status:** 0.1.0, the first release on Maven Central. The API may still
-> change before 1.0.
+> **Status:** 0.2.0. The API may still change before 1.0.
 
 ## Features
 
 - **Decode** JPEG XL (codestream and container) to gray, gray+alpha, RGB or
   RGBA with 8-bit, 16-bit or floating point samples, upright according to the
   image orientation.
-- **Animations:** all frames with their duration, name and loop count, at once
-  or one frame at a time; in Image I/O, every frame is an image.
+- **Animations** are read and written: all frames with their duration, name
+  and loop count, at once or one frame at a time; in Image I/O, every frame is
+  an image, and animations are written as sequences.
 - **Encode** 8-bit, 16-bit and floating point images lossless or lossy, with a
   quality (0 to 100) or Butteraugli distance and an effort from 1 to 10.
   Lossless encoding reproduces every sample exactly, including HDR values.
+  The output can be written to a stream or channel as it is produced.
 - **Lossless JPEG transcoding:** repack an existing JPEG as JPEG XL, typically
   10 to 20 percent smaller, and restore the original JPEG bit for bit.
 - **Metadata:** EXIF and XMP are read and written; EXIF orientation and the
@@ -39,22 +40,23 @@ bundled; nothing needs to be installed.
   metadata boxes beyond 16 MiB are rejected before their memory is allocated;
   both limits are configurable.
 - **Bundled native libraries** for Windows on x86_64, Linux on x86_64 and
-  aarch64, and macOS on Apple silicon, found through a service interface on
-  both the class path and the module path.
+  aarch64 (glibc and musl), and macOS on Apple silicon, found through a service
+  interface on both the class path and the module path.
+- **JDK 21:** `panamage-jxl-jdk21` offers the same API on JDK 21, where the
+  Foreign Function and Memory API is a preview feature.
 - **Tested against the reference images** of selected test cases of the
   official [JPEG XL conformance corpus](https://github.com/libjxl/conformance)
   (gray, float, alpha, orientation, animation, JPEG reconstruction).
 
 ## Requirements
 
-- JDK 25 or newer
+- JDK 25 or newer, or JDK 21 with `panamage-jxl-jdk21` (see [JDK 21](#jdk-21))
 - Windows 10 or newer on x86_64, Linux on x86_64 with glibc 2.29 or newer
   (for example Ubuntu 20.04, Debian 11, RHEL 9 or newer), Linux on aarch64
   with glibc 2.28 or newer (for example Ubuntu 20.04, Debian 10, RHEL 8,
-  Amazon Linux 2023 or newer), or macOS 11 or newer on Apple silicon (arm64).
-  musl-based systems such as Alpine Linux are recognized, but there are no
-  bundled libraries for them yet; libjxl 0.12 can be installed on the system
-  or put into the directory named by `panamage.jxl.library.path`.
+  Amazon Linux 2023 or newer), Linux on x86_64 or aarch64 with musl 1.2.4 or
+  newer (for example Alpine Linux 3.18 or newer), or macOS 11 or newer on
+  Apple silicon (arm64). Nothing else needs to be installed.
 
 ## Getting started
 
@@ -66,12 +68,12 @@ each platform the application runs on:
 <dependency>
     <groupId>net.sourceforge.streamsupport</groupId>
     <artifactId>panamage-jxl-imageio</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 <dependency>
     <groupId>net.sourceforge.streamsupport</groupId>
     <artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <scope>runtime</scope>
 </dependency>
 ```
@@ -79,18 +81,23 @@ each platform the application runs on:
 With Gradle:
 
 ```kotlin
-implementation("net.sourceforge.streamsupport:panamage-jxl-imageio:0.1.0")
-runtimeOnly("net.sourceforge.streamsupport:panamage-jxl-natives-windows-x86_64:0.1.0")
+implementation("net.sourceforge.streamsupport:panamage-jxl-imageio:0.2.0")
+runtimeOnly("net.sourceforge.streamsupport:panamage-jxl-natives-windows-x86_64:0.2.0")
 ```
 
 The other native artifacts are `panamage-jxl-natives-linux-x86_64`,
-`panamage-jxl-natives-linux-aarch64` and `panamage-jxl-natives-macos-aarch64`.
+`panamage-jxl-natives-linux-aarch64`, `panamage-jxl-natives-linux-musl-x86_64`,
+`panamage-jxl-natives-linux-musl-aarch64` and
+`panamage-jxl-natives-macos-aarch64`. Linux distributions with the musl C
+library, such as Alpine Linux and the container images based on it, need the
+`linux-musl` artifacts; if both a glibc and a musl artifact are present, the
+one matching the system is used.
 
 To try panamage without a build tool, download
-`panamage-0.1.0-windows-x86_64.zip`, `panamage-0.1.0-linux-x86_64.tar.gz`,
-`panamage-0.1.0-linux-aarch64.tar.gz` or `panamage-0.1.0-macos-aarch64.tar.gz`
-from the [Releases](../../releases) page and unpack it. It contains the JARs,
-a README and a small example program:
+`panamage-0.2.0-windows-x86_64.zip` or `panamage-0.2.0-<platform>.tar.gz` for
+`linux-x86_64`, `linux-aarch64`, `linux-musl-x86_64`, `linux-musl-aarch64` or
+`macos-aarch64` from the [Releases](../../releases) page and unpack it. It
+contains the JARs, a README and a small example program:
 
 ```sh
 # class path
@@ -110,7 +117,7 @@ For your own application, put these JARs on the class path or module path:
 | `panamage-jxl` | Decoder, encoder, JPEG transcoding (`panamage.jxl`) |
 | `panamage-jxl-imageio` | Image I/O plugin (`panamage.jxl.imageio`) |
 | `panamage-jxl-spi` | Service interface for the native libraries |
-| `panamage-jxl-natives-windows-x86_64`, `panamage-jxl-natives-linux-x86_64`, `panamage-jxl-natives-linux-aarch64` or `panamage-jxl-natives-macos-aarch64` | libjxl for the platform |
+| `panamage-jxl-natives-<platform>` (`windows-x86_64`, `linux-x86_64`, `linux-aarch64`, `linux-musl-x86_64`, `linux-musl-aarch64` or `macos-aarch64`) | libjxl for the platform |
 
 ## Usage
 
@@ -150,6 +157,26 @@ of frames, `read(i)` returns frame `i` as it is displayed, and
 `JxlImageMetadata.getFrameInfo()` of `getImageMetadata(i)` gives its duration
 and name. `ImageIO.read` returns the first frame.
 
+An animation is written as a sequence:
+
+```java
+ImageWriter writer = ImageIO.getImageWritersByFormatName("jxl").next();
+try (ImageOutputStream out = ImageIO.createImageOutputStream(new File("animation.jxl"))) {
+    writer.setOutput(out);
+    writer.prepareWriteSequence(null);
+    for (BufferedImage frame : frames) {
+        writer.writeToSequence(new IIOImage(frame, null, null), null);  // 100 ms each
+    }
+    writer.endWriteSequence();
+}
+```
+
+The duration of each frame comes from `JxlImageMetadata.setFrameInfo`, the
+tick rate and the loop count from `setAnimationHeader` of the first frame;
+without them, a frame is shown for 100 ms and the animation plays forever.
+Metadata read from a JPEG XL animation carries these values, so `readAll` of
+every frame followed by `writeToSequence` keeps the timing.
+
 ### Lossless JPEG transcoding
 
 ```java
@@ -178,6 +205,17 @@ byte[] lossy = JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90).withEffor
 `JxlDecoder.decode(data)` and `decode(data, channels)` return 8-bit samples
 (`JxlImage.Uint8`).
 
+`JxlEncoder.encode`, `JxlTranscoder.fromJpeg` and `JxlTranscoder.toJpeg` can
+also write to an `OutputStream` or a `WritableByteChannel` as the output is
+produced, without holding it in memory. They return the number of bytes
+written and neither flush nor close the target:
+
+```java
+try (OutputStream out = Files.newOutputStream(Path.of("output.jxl"))) {
+    JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90), metadata, out);
+}
+```
+
 ### Animations
 
 `decode` returns the first frame of an animation. All frames, as they are
@@ -193,6 +231,29 @@ try (JxlFrameDecoder decoder = JxlFrameDecoder.open(data, 4, JxlSampleType.UINT8
     }
 }
 ```
+
+`JxlFrameEncoder` writes an animation one frame at a time, and
+`JxlEncoder.encodeAnimation` encodes a list of frames, for example the decoded
+frames above:
+
+```java
+try (OutputStream out = Files.newOutputStream(Path.of("animation.jxl"));
+        JxlFrameEncoder encoder = JxlFrameEncoder.open(out, JxlAnimationHeader.millis(0),  // ms, loop forever
+                JxlEncodeOptions.ofLossless(), JxlMetadata.NONE)) {
+    for (JxlImage image : images) {
+        encoder.add(image, 100);                                  // shown for 100 ms
+    }
+    encoder.finish();                                             // without it, the file is incomplete
+}
+
+JxlAnimationHeader header = new JxlAnimationHeader(animation.ticksPerSecondNumerator(),
+        animation.ticksPerSecondDenominator(), animation.loops());
+byte[] copy = JxlEncoder.encodeAnimation(frames, header, JxlEncodeOptions.ofLossless(), JxlMetadata.NONE);
+```
+
+Frame durations are given in ticks of the `JxlAnimationHeader`. Every frame
+covers the whole image and must match the first frame in size, channels,
+sample type and ICC profile; only the last frame may have a duration of 0.
 
 ### Limits for untrusted input
 
@@ -233,6 +294,41 @@ so a hostile file can still make libjxl allocate more than the limit. For
 fully untrusted input, decoding in a separate process with a memory limit is
 the strongest protection.
 
+## JDK 21
+
+On JDK 21, the Foreign Function and Memory API is a preview feature with a
+slightly different API. `panamage-jxl-jdk21` contains `panamage-jxl` and
+`panamage-jxl-imageio` built for it, with the same API, and is used instead of
+them. `panamage-jxl-spi` (a dependency) and the native artifacts are the same
+as for JDK 25:
+
+```xml
+<dependency>
+    <groupId>net.sourceforge.streamsupport</groupId>
+    <artifactId>panamage-jxl-jdk21</artifactId>
+    <version>0.2.0</version>
+</dependency>
+<dependency>
+    <groupId>net.sourceforge.streamsupport</groupId>
+    <artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
+    <version>0.2.0</version>
+    <scope>runtime</scope>
+</dependency>
+```
+
+- It runs on JDK 21 only (any update), not on JDK 22 or newer; use
+  `panamage-jxl` and `panamage-jxl-imageio` there.
+- The JVM needs `--enable-preview`; `--enable-native-access=ALL-UNNAMED`
+  avoids the warning about native access:
+
+  ```sh
+  java --enable-preview --enable-native-access=ALL-UNNAMED -cp "lib/*" ...
+  ```
+
+- It has no module descriptor and is meant for the class path.
+- It is not part of the release archives; the JAR is attached to the GitHub
+  release.
+
 ## Native libraries
 
 The native libraries are loaded on first use from the first of these sources:
@@ -254,10 +350,11 @@ and should be private to the user, too.
 The loaded library must have the libjxl version the bindings were generated
 for (0.12.x). `JxlNative.librarySource()` tells where the library came from.
 
-On Windows, libjxl needs the Microsoft Visual C++ runtime, which every JDK
-ships in its `bin` directory. libjxl publishes no binaries for macOS and for
-Linux on aarch64; the libraries for these platforms are built from the libjxl
-sources by this project (see [natives/README.md](natives/README.md)).
+libjxl publishes no binaries for macOS, Linux on aarch64 and musl-based Linux,
+and its DLLs for Windows need a newer Microsoft Visual C++ runtime than some
+JDKs ship. The libraries for these platforms are therefore built from the
+libjxl sources by this project (see [natives/README.md](natives/README.md));
+the DLLs for Windows contain the C and C++ runtime and need nothing else.
 
 ## Building from source
 
@@ -278,11 +375,12 @@ Prerequisites:
 
 - Python 3.12 or newer for the helper scripts (standard library only;
   `make_test_images.py` also needs Pillow).
-- 7-Zip (`7z`, or `7zz` on macOS, on the `PATH`) to unpack the libjxl archive
-  for Windows.
+- 7-Zip (`7z`, or `7zz` on macOS, on the `PATH`) to unpack the libjxl release
+  for Windows; not needed with `fetch_tools.py --build-only`.
 
-Download the external tools (libjxl for Windows and Linux, jextract, a Linux
-JDK for tests in WSL, and about 45 MB of conformance test cases) and build:
+Download the external tools (libjxl for Linux x86_64, the libjxl release for
+Windows with the headers and `cjxl`, jextract, a Linux JDK for tests in WSL,
+and about 45 MB of conformance test cases) and build:
 
 ```sh
 python scripts/fetch_tools.py
@@ -291,8 +389,16 @@ python scripts/fetch_tools.py
 
 `python scripts/fetch_tools.py --no-conformance` leaves out the conformance
 test cases; the conformance tests are then skipped. `--build-only` leaves out
-jextract and the Linux JDK, which only the helper scripts need. The libraries
-for macOS and Linux aarch64 are checked in under `natives/`.
+jextract, the libjxl release for Windows and the Linux JDK, which only the
+helper scripts need. The libraries for Windows, macOS, Linux aarch64 and
+musl-based Linux are checked in under `natives/`.
+
+`panamage-jxl-jdk21` is built only with the profile `jdk21`
+(`./mvnw -Pjdk21 verify`). It needs a JDK 21 in `~/.m2/toolchains.xml` as
+well, with `<version>21</version>`, and Python: its sources are generated
+from those of `panamage-jxl` and `panamage-jxl-imageio` by
+`scripts/make_jdk21_variant.py`, run with `python` from the `PATH` or with
+`-Dpython.executable=...`.
 
 The tools go to `.tools` in the project. To keep them elsewhere, set the
 environment variable `PANAMAGE_TOOLS_DIR` or pass `-Dtools.dir=...` to Maven
@@ -308,7 +414,10 @@ Other scripts in `scripts/`:
 | `make_release.py` | Build the release files in `dist/<version>` (`--wsl` also tests on Linux, `--central` writes the signed bundle for Maven Central) |
 | `build_libjxl_macos.py` | Build the libjxl libraries for macOS arm64 from source (on macOS; used by the workflow below) |
 | `build_libjxl_linux_aarch64.py` | Build the libjxl libraries for Linux aarch64 from source (in the manylinux_2_28 container; used by the workflow below) |
-| `write_toolchains.py` | Write a Maven toolchains file for a JDK 25 |
+| `build_libjxl_linux_musl.py` | Build the libjxl libraries for musl-based Linux on x86_64 and aarch64 from source (in an Alpine 3.18 container; used by the workflow below) |
+| `build_libjxl_windows.py` | Build the libjxl DLLs for Windows x86_64 from source with the static runtime (Visual Studio with clang-cl; used by the workflow below) |
+| `make_jdk21_variant.py` | Generate the sources of `panamage-jxl-jdk21` (`--generate`, run by Maven) and regenerate its checked-in jextract 21 bindings (`--update-bindings`) |
+| `write_toolchains.py` | Write a Maven toolchains file for a JDK 25 and, with `--jdk21`, a JDK 21 |
 
 Every build also creates sources and Javadoc JARs. The JARs are reproducible:
 `project.build.outputTimestamp` fixes the time stamps, so the same sources
@@ -331,7 +440,8 @@ Releases are built and uploaded by hand:
    `PANAMAGE_GPG` (the gpg executable) and `PANAMAGE_GPG_KEY` (fingerprint or
    key ID) can replace `--gpg` and `--gpg-key`; without a key, gpg signs with
    its default key. gpg may ask for the passphrase. `--dry-run` tries this out
-   with a snapshot version in `target/release-dry-run`.
+   with a snapshot version in `target/release-dry-run`. The release includes
+   `panamage-jxl-jdk21`, so `~/.m2/toolchains.xml` needs a JDK 21, too.
 3. Upload `panamage-<version>-central.zip` in the
    [Central Portal](https://central.sonatype.com/publishing) (Publish
    Component), wait for the validation and publish it.
@@ -341,26 +451,35 @@ Releases are built and uploaded by hand:
 
 ## Continuous integration
 
-Three GitHub Actions workflows, all started manually (Actions, Run workflow):
+Five GitHub Actions workflows, all started manually (Actions, Run workflow):
 
 - **Build** builds the project and runs all tests on Linux x86_64, Linux
-  aarch64, macOS arm64 and Windows x86_64, each with its own native libraries;
-  the platforms can be chosen when starting it. The test reports are kept as workflow artifacts.
+  aarch64, macOS arm64 and Windows x86_64, each with its own native libraries
+  and including `panamage-jxl-jdk21` on JDK 21, and on Alpine Linux on x86_64
+  and aarch64 in a container; the platforms can be chosen when starting it.
+  The test reports are kept as workflow artifacts.
 - **libjxl for macOS arm64** builds the libjxl libraries for macOS from source
   and checks them; its artifact is what `natives/` contains.
 - **libjxl for Linux aarch64** does the same for Linux on 64-bit ARM, in the
   manylinux_2_28 container (glibc 2.28).
+- **libjxl for Linux musl** does the same for musl-based Linux on x86_64 and
+  aarch64, in an Alpine 3.18 container (musl 1.2.4).
+- **libjxl for Windows x86_64** does the same for Windows, with the static C
+  and C++ runtime.
 
 ## Limitations
 
 - Integer samples with more than 16 bits are decoded as floating point; 16-bit
   floating point (half precision) is not supported as a sample type.
-- Animations cannot be written yet; the writers write single images.
-- Whole images are held in memory; there is no streaming or progressive API yet.
+- Written animation frames always cover the whole image; layers, blending and
+  cropped frames are not written.
+- The input and whole decoded images are held in memory; only the output of
+  the encoders and the transcoder can be written as it is produced. There is
+  no progressive API yet.
 - The Image I/O writer converts images without a component color model (for
   example `TYPE_INT_RGB` or indexed images) to 8-bit sRGB.
-- Native libraries for macOS on Intel (x86_64) and for musl-based Linux are
-  not available yet.
+- Native libraries for macOS on Intel (x86_64) and Windows on ARM (aarch64)
+  are not available yet.
 
 ## License
 

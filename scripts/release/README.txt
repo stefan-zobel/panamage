@@ -70,6 +70,9 @@ Of an animation, JxlDecoder.decode returns the first frame;
 JxlDecoder.decodeFrames returns all frames with their durations, and
 JxlFrameDecoder decodes one frame at a time. In Image I/O, every frame is an
 image: getNumImages(true) counts the frames and read(i) returns frame i.
+Animations are written with JxlFrameEncoder, one frame at a time, with
+JxlEncoder.encodeAnimation, or in Image I/O as a sequence
+(prepareWriteSequence, writeToSequence, endWriteSequence).
 
 EXIF and XMP metadata are kept by JxlTranscoder and when an image is copied
 with ImageReader.readAll and ImageWriter.write (IIOImage with metadata); the

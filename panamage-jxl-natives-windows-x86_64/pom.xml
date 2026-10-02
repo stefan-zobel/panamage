@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>net.sourceforge.streamsupport</groupId>
 		<artifactId>panamage</artifactId>
-		<version>0.1.1-SNAPSHOT</version>
+		<version>0.2.0</version>
 	</parent>
 
 	<artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
