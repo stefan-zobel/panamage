@@ -36,7 +36,7 @@
 
 	<properties>
 		<!-- Source of the libjxl runtime DLLs and their location inside the JAR. -->
-		<natives.bin.dir>${jxl.native.dir}/bin</natives.bin.dir>
+		<natives.bin.dir>${jxl.native.windows.dir}/bin</natives.bin.dir>
 		<natives.target.dir>${project.build.outputDirectory}/panamage/jxl/natives/windows/x86_64</natives.target.dir>
 	</properties>
 
@@ -72,7 +72,7 @@
 						<configuration>
 							<rules>
 								<requireFilesExist>
-									<message>The libjxl runtime DLLs were not found. Run python scripts/fetch_tools.py, or set the PANAMAGE_TOOLS_DIR environment variable or -Dtools.dir to the tools directory.</message>
+									<message>The libjxl DLLs for Windows were not found. They are checked in under natives/ (see natives/README.md); set -Djxl.native.windows.dir if they are elsewhere.</message>
 									<files>
 										<file>${natives.bin.dir}/brotlicommon.dll</file>
 										<file>${natives.bin.dir}/brotlidec.dll</file>
@@ -125,7 +125,7 @@
 							<outputDirectory>${project.build.outputDirectory}/META-INF/licenses</outputDirectory>
 							<resources>
 								<resource>
-									<directory>${jxl.native.dir}/licenses</directory>
+									<directory>${jxl.native.windows.dir}/licenses</directory>
 									<filtering>false</filtering>
 									<includes>
 										<include>LICENSE.libjxl</include>

@@ -20,7 +20,8 @@ libjxl_threads runner is created and destroyed.
 
 Writes to the output directory:
   * libjxl-<version>-windows-x86_64.tar.gz with bin/ and licenses/, the
-    layout of the libjxl release (usable as -Djxl.native.dir after unpacking)
+    layout of the libjxl release (usable as -Djxl.native.windows.dir after
+    unpacking; the content is checked in under natives/)
   * the same name with .sha256, in the format of sha256sum
 
 Needs Visual Studio 2022 or newer with the C++ x64 tools and the C++ Clang

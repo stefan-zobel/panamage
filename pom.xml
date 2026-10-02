@@ -62,8 +62,10 @@
 		<!-- Directory with the external tools, see scripts/fetch_tools.py: .tools in the
 		     project by default, or the PANAMAGE_TOOLS_DIR environment variable, or -Dtools.dir=... -->
 		<tools.dir>${maven.multiModuleProjectDirectory}/.tools</tools.dir>
-		<!-- Root of the unpacked libjxl distribution for Windows (bin, include, lib, licenses). -->
-		<jxl.native.dir>${tools.dir}/libjxl-0.12.0</jxl.native.dir>
+		<!-- libjxl and Brotli DLLs for Windows x86_64 (bin, licenses), checked in because the DLLs of
+		     the libjxl release need a newer C++ runtime than some JDKs ship; these are built with
+		     the static runtime. See natives/README.md. -->
+		<jxl.native.windows.dir>${maven.multiModuleProjectDirectory}/natives/libjxl-0.12.0-windows-x86_64</jxl.native.windows.dir>
 		<!-- libjxl and Brotli shared libraries for Linux x86_64 (lib, licenses). -->
 		<jxl.native.linux.dir>${tools.dir}/libjxl-0.12.0-linux-x86_64</jxl.native.linux.dir>
 		<!-- libjxl and Brotli shared libraries for Linux aarch64 (lib, licenses), checked in because

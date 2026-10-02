@@ -11,9 +11,9 @@ import panamage.jxl.spi.JxlNativeBundle;
 /**
  * The libjxl DLLs for Windows x86_64, stored as resources next to this class.
  * <p>
- * The DLLs need the Microsoft Visual C++ runtime ({@code msvcp140.dll},
- * {@code vcruntime140.dll}), which every JDK for Windows ships in its
- * {@code bin} directory.
+ * The DLLs are built with the static C and C++ runtime, so they need nothing
+ * but {@code KERNEL32.dll} and each other, and work with the Microsoft Visual
+ * C++ runtime of any JDK, whatever its version.
  */
 public final class WindowsX64Bundle implements JxlNativeBundle {
 

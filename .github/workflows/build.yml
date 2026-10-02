@@ -79,19 +79,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      # fetch_tools.py needs 7-Zip for the Deflate64 archive of libjxl for Windows.
-      - name: Make sure 7-Zip is available
-        shell: python
-        run: |
-          import shutil, subprocess, sys
-          if not (shutil.which("7z") or shutil.which("7zz")):
-              if sys.platform == "darwin":
-                  subprocess.run(["brew", "install", "sevenzip"], check=True)
-              elif sys.platform.startswith("linux"):
-                  subprocess.run(["sudo", "apt-get", "install", "-y", "7zip"], check=True)
-              else:
-                  sys.exit("7-Zip is missing")
-
       - uses: actions/cache@v6
         with:
           path: .tools
@@ -139,10 +126,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-
-      # fetch_tools.py needs 7-Zip for the Deflate64 archive of libjxl for Windows.
-      - name: Make sure 7-Zip is available
-        run: command -v 7z || command -v 7zz || sudo apt-get install -y 7zip
 
       - uses: actions/cache@v6
         with:

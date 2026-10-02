@@ -1,12 +1,14 @@
 package panamage.jxl.natives.windows.x86_64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +31,19 @@ class WindowsX64BundleTest {
                 byte[] header = in.readNBytes(2);
                 // Every Windows PE file starts with the "MZ" DOS header.
                 assertEquals("MZ", new String(header, StandardCharsets.US_ASCII), name);
+            }
+        }
+    }
+
+    @Test
+    void dllsNeedNoVisualCppRuntime() throws IOException {
+        // Imported DLL names are stored as ASCII strings in the PE file.
+        for (String name : bundle.libraries()) {
+            try (InputStream in = bundle.open(name)) {
+                String content = new String(in.readAllBytes(), StandardCharsets.ISO_8859_1).toLowerCase(Locale.ROOT);
+                for (String runtime : new String[] {"msvcp140", "vcruntime140", "api-ms-win-crt-"}) {
+                    assertFalse(content.contains(runtime), name + " imports " + runtime);
+                }
             }
         }
     }

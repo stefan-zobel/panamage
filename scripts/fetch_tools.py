@@ -2,7 +2,9 @@
 
 Tools:
   * jextract 25 (Windows x64 early-access build from jdk.java.net)
-  * libjxl 0.12.0 shared build for Windows x64 (GitHub release asset)
+  * libjxl 0.12.0 shared build for Windows x64 (GitHub release asset), for
+    its headers (jextract) and cjxl (make_test_images.py); the DLLs bundled
+    for Windows are built from source and checked in under natives/
   * libjxl 0.12.0 shared libraries for Linux x86_64, taken from the Ubuntu
     20.04 packages of the GitHub release, plus the Brotli libraries they
     depend on (Ubuntu 20.04 archive)
@@ -15,13 +17,14 @@ unpacked; the conformance files are taken from a pinned commit or verified
 against the digests in their test.json. Already unpacked tools are left
 untouched, so the script can be run repeatedly.
 
-The libraries for macOS are not downloaded; they are checked in under natives/.
+The libraries for Windows, macOS, Linux aarch64 and musl-based Linux are not
+downloaded; they are checked in under natives/.
 
 Usage:
   python fetch_tools.py [--dest DIR] [--no-conformance] [--build-only]
 
---build-only skips jextract and the Linux JDK, which only the helper scripts
-need (for example in continuous integration).
+--build-only skips jextract, the libjxl release for Windows and the Linux JDK,
+which only the helper scripts need (for example in continuous integration).
 """
 
 import argparse
@@ -316,14 +319,15 @@ def main() -> int:
     parser.add_argument("--no-conformance", action="store_true",
                         help="do not download the conformance test cases (about 45 MB)")
     parser.add_argument("--build-only", action="store_true",
-                        help="download only what the Maven build needs (no jextract, no Linux JDK for WSL)")
+                        help="download only what the Maven build needs (no jextract, no libjxl release "
+                             "for Windows, no Linux JDK for WSL)")
     args = parser.parse_args()
     dest_root = tools_dir(args.dest)
     downloads = dest_root / "_downloads"
     downloads.mkdir(parents=True, exist_ok=True)
     if not args.build_only:
         fetch_jextract(dest_root, downloads)
-    fetch_libjxl(dest_root, downloads)
+        fetch_libjxl(dest_root, downloads)
     fetch_libjxl_linux(dest_root, downloads)
     if not args.build_only:
         fetch_linux_jdk(dest_root, downloads)

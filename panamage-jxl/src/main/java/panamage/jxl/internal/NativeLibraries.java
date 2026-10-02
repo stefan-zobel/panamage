@@ -249,8 +249,9 @@ public final class NativeLibraries {
      */
     static String note(String osName, String platform) {
         if (osName.startsWith("Windows")) {
-            return "libjxl needs the Microsoft Visual C++ runtime (msvcp140.dll, vcruntime140.dll),"
-                    + " which JDKs ship in their bin directory.";
+            return "libjxl DLLs other than the bundled ones, such as those of the libjxl releases, need the"
+                    + " Microsoft Visual C++ runtime (msvcp140.dll, vcruntime140.dll) 14.40 or newer;"
+                    + " the copy in the bin directory of some JDKs is older.";
         } else if (platform != null && UNBUNDLED_PLATFORMS.contains(platform)) {
             return "there are no bundled libraries for " + platform + " yet; install libjxl "
                     + LibjxlVersion.MAJOR + "." + LibjxlVersion.MINOR + " on the system or set "

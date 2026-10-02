@@ -34,6 +34,7 @@ class NativeLibrariesTest {
     @Test
     void noteNamesTheRequirementsOfThePlatform() {
         assertTrue(NativeLibraries.note("Windows 11", "windows-x86_64").contains("Visual C++ runtime"));
+        assertTrue(NativeLibraries.note("Windows 11", "windows-x86_64").contains("14.40"));
         assertTrue(NativeLibraries.note("Windows 11", "windows-aarch64").contains("Visual C++ runtime"));
         assertTrue(NativeLibraries.note("Linux", "linux-x86_64").contains("glibc 2.29"));
         assertTrue(NativeLibraries.note("Linux", "linux-aarch64").contains("glibc 2.28"));

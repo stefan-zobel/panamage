@@ -63,7 +63,8 @@ JAR_CLASSIFIERS = ["", "-sources", "-javadoc"]
 PLATFORMS = {
     "windows-x86_64": {
         "archive": "zip",
-        "requirements": "Windows 10 or newer on x86_64 (64-bit Intel or AMD)",
+        "requirements": "Windows 10 or newer on x86_64 (64-bit Intel or AMD); nothing else needs\n"
+                        "  to be installed",
     },
     "linux-x86_64": {
         "archive": "tar.gz",

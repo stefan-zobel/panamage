@@ -134,9 +134,9 @@
 								</resource>
 								<!-- Highway is linked statically into libjxl.so, but the Debian
 								     copyright file does not cover it; its license text comes from
-								     the libjxl distribution for Windows (same project and license). -->
+								     the checked-in libraries for Windows (same libjxl release). -->
 								<resource>
-									<directory>${jxl.native.dir}/licenses</directory>
+									<directory>${jxl.native.windows.dir}/licenses</directory>
 									<filtering>false</filtering>
 									<includes>
 										<include>LICENSE.highway</include>

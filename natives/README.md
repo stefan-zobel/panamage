@@ -2,9 +2,12 @@
 
 libjxl publishes no binaries for macOS, for Linux on aarch64 and for
 musl-based Linux, so the libraries for these platforms are built from source
-by this project and checked in here. The other platforms use the binaries of the libjxl releases,
-downloaded by `scripts/fetch_tools.py`. The build scripts share the checkout,
-the common CMake options and the packing in `scripts/libjxl_source.py`.
+by this project and checked in here. The DLLs of the libjxl release for
+Windows use the C++ runtime of the process and need a newer version than some
+JDKs ship, so the DLLs for Windows are built here as well, with the static
+runtime. Linux on x86_64 uses the binaries of the libjxl release, downloaded
+by `scripts/fetch_tools.py`. The build scripts share the checkout, the common
+CMake options and the packing in `scripts/libjxl_source.py`.
 
 ## libjxl-0.12.0-macos-aarch64
 
@@ -101,6 +104,35 @@ the musl C library. The files are named after their SONAMEs and stripped.
   the files (`sha256sum -c SHA256SUMS`).
 
 The module `panamage-jxl-natives-linux-musl-aarch64` packs them into its JAR.
+
+## libjxl-0.12.0-windows-x86_64
+
+The libjxl 0.12.0 DLLs for Windows 10 or newer on x86_64: libjxl, libjxl_cms
+(with skcms) and libjxl_threads, plus the Brotli DLLs they need; Highway is
+linked statically. The file names are those of the libjxl release.
+
+The DLLs of the libjxl release use the Microsoft Visual C++ runtime of the
+process (`msvcp140.dll`, `vcruntime140.dll`), which the JVM loads from its
+`bin` directory, and need version 14.40 or newer; with an older copy, such as
+the one of JDK 21.0.3 (14.36), `JxlThreadParallelRunnerCreate` crashes. These
+DLLs are built with the static C and C++ runtime (`/MT`) instead, so they need
+nothing but `KERNEL32.dll` and each other.
+
+- Source: the same libjxl commit and submodules as for macOS.
+- Built by the workflow `.github/workflows/libjxl-windows.yml` (manual start)
+  with `scripts/build_libjxl_windows.py` on the runner `windows-2025` with
+  Visual Studio 18.10.2, clang-cl 22.1.3 and Ninja; the CMake options are
+  listed in the script and in `scripts/libjxl_source.py`.
+- Checked by the script: x64 DLLs, no dependencies besides these DLLs and
+  `KERNEL32.dll`, the entry points panamage-jxl resolves first are exported,
+  and the DLLs load in a new process, libjxl reports version 0.12.0 and a
+  thread runner can be created.
+- Workflow artifact `libjxl-0.12.0-windows-x86_64.tar.gz`, SHA-256
+  `09651acb9b717a024dd0375033798d367798a5dcf34a9052bdd7ddbe2017d493`
+  (run 37026027257); the checked-in files are its content. `SHA256SUMS` lists
+  the files (`sha256sum -c SHA256SUMS`).
+
+The module `panamage-jxl-natives-windows-x86_64` packs them into its JAR.
 
 To update the libraries of a platform, run its workflow, download the artifact
 and replace the directory with the content of the archive.
