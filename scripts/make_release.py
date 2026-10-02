@@ -8,6 +8,9 @@ to dist/<version>/:
     a JDK 8 in the toolchains file is used by the tests that check that the
     Image I/O plugin stays out of the way on Java 8, which are skipped
     without it)
+  * panamage-jxl-imagej-<version>.jar, the ImageJ and Fiji plugin (also built
+    with the profile jdk21); it is published on the Fiji update site (see
+    make_update_site.py), not on Maven Central
   * panamage-<version>-<platform>.zip for windows-x86_64 and
     panamage-<version>-<platform>.tar.gz for linux-x86_64, linux-aarch64,
     linux-musl-x86_64, linux-musl-aarch64 and macos-aarch64, each with the
@@ -17,7 +20,7 @@ to dist/<version>/:
 
 With --central, it also writes central/panamage-<version>-central.zip, the
 bundle for a manual upload to the Maven Central Portal: the parent POM and,
-for every module, its POM, JAR, sources JAR and Javadoc JAR in the Maven
+for every module except the ImageJ plugin, its POM, JAR, sources JAR and Javadoc JAR in the Maven
 repository layout, each with a GPG signature (.asc) and MD5 and SHA-1
 checksums. The files are signed with gpg (--gpg, or the PANAMAGE_GPG
 environment variable, or gpg on the PATH) and the key given by --gpg-key or
@@ -57,6 +60,9 @@ DRY_RUN_DIR = PROJECT_DIR / "target" / "release-dry-run"
 COMMON_MODULES = ["panamage-jxl-spi", "panamage-jxl", "panamage-jxl-imageio"]
 # Published with the other modules, but not part of the platform archives.
 JDK21_MODULE = "panamage-jxl-jdk21"
+# Only in dist/ and on the Fiji update site: it depends on ImageJ artifacts that are
+# published only in the SciJava repository, not on Maven Central.
+IMAGEJ_MODULE = "panamage-jxl-imagej"
 TOOLCHAINS_FILE = Path.home() / ".m2" / "toolchains.xml"
 
 GROUP_ID = "net.sourceforge.streamsupport"
@@ -338,7 +344,7 @@ def main() -> int:
                              "(for example an archive viewer). Close it and run again with --skip-build.")
     dist.mkdir(parents=True)
 
-    for module in jar_modules():
+    for module in jar_modules() + [IMAGEJ_MODULE]:
         shutil.copy2(module_jar(module, version), dist)
     for platform, settings in PLATFORMS.items():
         root = f"panamage-{version}-{platform}"

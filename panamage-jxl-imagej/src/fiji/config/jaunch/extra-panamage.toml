@@ -1,0 +1,9 @@
+# Installed by the panamage update site into config/jaunch/ of Fiji, whose
+# launcher reads every extra*.toml file there.
+#
+# panamage-jxl-jdk21 uses the Foreign Function and Memory API, a preview
+# feature of Java 21, so Fiji has to start Java 21 with --enable-preview.
+# Other Java versions are not affected.
+jvm.runtime-args = [
+    'JAVA:21|--enable-preview',
+]

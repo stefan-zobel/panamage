@@ -11,7 +11,7 @@
 
 	<artifactId>panamage-jxl-imagej</artifactId>
 	<name>panamage-jxl-imagej</name>
-	<description>JPEG XL for ImageJ and Fiji, based on panamage-jxl-jdk21 (runs only on JDK 21, with --enable-preview)</description>
+	<description>Opens and saves JPEG XL images in ImageJ and Fiji, with channels, slices, time points, calibration and lookup tables, lossless or lossy; based on panamage-jxl-jdk21 (needs Java 21 with --enable-preview, which the Fiji update site sets)</description>
 
 	<!-- Built with the profile jdk21 (-Pjdk21), like panamage-jxl-jdk21. ImageJ, ImgLib2 and
 	     SciJava are provided by Fiji; the versions are those of the Fiji release this module is
