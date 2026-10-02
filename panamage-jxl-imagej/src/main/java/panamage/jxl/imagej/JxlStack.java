@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 import ij.ImagePlus;
+import ij.ImageStack;
 import panamage.jxl.JxlAnimationHeader;
 import panamage.jxl.JxlBox;
 import panamage.jxl.JxlChannels;
@@ -39,6 +40,9 @@ record JxlStack(List<JxlChannels> positions, StackMetadata metadata) {
     /** Every frame is shown for 100 ms when the file is played as an animation. */
     private static final JxlAnimationHeader ANIMATION = JxlAnimationHeader.millis(0);
     private static final long FRAME_DURATION = 100;
+
+    /** The fewest bits a 16-bit image is stored with, so that it is read back as a 16-bit image. */
+    private static final int MIN_16_BIT_BITS = 9;
 
     JxlStack {
         positions = List.copyOf(positions);
@@ -118,6 +122,12 @@ record JxlStack(List<JxlChannels> positions, StackMetadata metadata) {
 
     /**
      * Encodes an ImageJ image with its metadata.
+     * <p>
+     * A 16-bit image is stored with the bit depth its largest sample needs,
+     * but at least 9 bits: the samples keep their values, and lossy
+     * compression measures its errors against the range of the data instead
+     * of the whole 16-bit range, in which data such as 12-bit camera images
+     * would be nearly black and lose much of their detail.
      *
      * @param imp     the image
      * @param out     the stream that receives the file; it is neither flushed
@@ -136,17 +146,39 @@ record JxlStack(List<JxlChannels> positions, StackMetadata metadata) {
                 List.of(JxlBox.of(StackMetadata.BOX_TYPE, StackMetadata.of(imp).toJson())));
         int slices = imp.getNSlices();
         int frames = imp.getNFrames();
+        int bits = significantBits(imp);
         if (slices == 1 && frames == 1) {
-            JxlEncoder.encode(ImagePlusConverter.toChannels(imp, 1, 1, rgb), options, metadata, out);
+            JxlEncoder.encode(ImagePlusConverter.toChannels(imp, 1, 1, rgb, bits), options, metadata, out);
             return;
         }
         try (JxlFrameEncoder encoder = JxlFrameEncoder.open(out, ANIMATION, options, metadata)) {
             for (int t = 1; t <= frames; t++) {
                 for (int z = 1; z <= slices; z++) {
-                    encoder.add(ImagePlusConverter.toChannels(imp, z, t, rgb), FRAME_DURATION);
+                    encoder.add(ImagePlusConverter.toChannels(imp, z, t, rgb, bits), FRAME_DURATION);
                 }
             }
             encoder.finish();
         }
+    }
+
+    /**
+     * Returns the bits that the samples of a 16-bit image need, at least
+     * {@value #MIN_16_BIT_BITS}.
+     *
+     * @param imp the image
+     * @return the bits per sample, or 0 for an image that is not 16-bit
+     */
+    static int significantBits(ImagePlus imp) {
+        if (imp.getBitDepth() != 16) {
+            return 0;
+        }
+        int max = 0;
+        ImageStack stack = imp.getStack();
+        for (int n = 1; n <= stack.getSize(); n++) {
+            for (short sample : (short[]) stack.getPixels(n)) {
+                max = Math.max(max, sample & 0xFFFF);
+            }
+        }
+        return Math.max(MIN_16_BIT_BITS, Integer.SIZE - Integer.numberOfLeadingZeros(max));
     }
 }

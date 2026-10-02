@@ -27,6 +27,7 @@ import ij.ImagePlus;
 import ij.ImageStack;
 import ij.process.ByteProcessor;
 import ij.process.ColorProcessor;
+import ij.process.ShortProcessor;
 import net.imagej.Dataset;
 import net.imagej.DatasetService;
 import net.imagej.ImgPlus;
@@ -180,6 +181,28 @@ class JxlStackTest {
 
         assertEquals(1, JxlStack.read(jxl, JxlLimits.defaults()).metadata().slices());
         assertEquals(1, JxlStack.read(invalid, JxlLimits.defaults()).metadata().slices());
+    }
+
+    @Test
+    void sixteenBitImagesAreStoredWithTheBitsTheyNeed() throws IOException {
+        for (int max : new int[] {885, 200, 4095, 65535}) {
+            short[] plane = new short[TestPlanes.SAMPLES];
+            for (int i = 0; i < plane.length; i++) {
+                plane[i] = (short) (i * 37L % (max + 1));
+            }
+            plane[0] = (short) max;
+            ImagePlus imp = new ImagePlus("bits", new ShortProcessor(WIDTH, HEIGHT, plane, null));
+
+            byte[] jxl = write(imp, false, null);
+            ImagePlus read = JxlStack.read(jxl, JxlLimits.defaults()).toImagePlus("read");
+
+            int expected = Math.max(9, Integer.SIZE - Integer.numberOfLeadingZeros(max));
+            assertEquals(expected, JxlStack.significantBits(imp), "max " + max);
+            assertEquals(expected, JxlDecoder.readInfo(jxl).bitsPerSample(), "max " + max);
+            assertEquals(ImagePlus.GRAY16, read.getType(), "max " + max);
+            assertArrayEquals(plane, (short[]) read.getProcessor().getPixels(), "max " + max);
+        }
+        assertEquals(0, JxlStack.significantBits(new ImagePlus("8-bit", new ByteProcessor(WIDTH, HEIGHT))));
     }
 
     @Test

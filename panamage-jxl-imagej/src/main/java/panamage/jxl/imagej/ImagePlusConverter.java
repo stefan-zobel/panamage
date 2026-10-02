@@ -171,6 +171,23 @@ public final class ImagePlusConverter {
      *                                  channels
      */
     public static JxlChannels toChannels(ImagePlus imp, int slice, int frame, boolean rgb) {
+        return toChannels(imp, slice, frame, rgb, 0);
+    }
+
+    /**
+     * As {@link #toChannels(ImagePlus, int, int, boolean)}, with the number
+     * of significant bits of the samples.
+     *
+     * @param imp           the ImageJ image
+     * @param slice         the slice (Z), from 1 to the number of slices
+     * @param frame         the frame (T), from 1 to the number of frames
+     * @param rgb           whether the first three channels become red, green
+     *                      and blue
+     * @param bitsPerSample the bits per sample of a 16-bit image, or 0 for
+     *                      the size of the sample type
+     * @return the JPEG XL image
+     */
+    static JxlChannels toChannels(ImagePlus imp, int slice, int frame, boolean rgb, int bitsPerSample) {
         Objects.requireNonNull(imp, "imp");
         if (slice < 1 || slice > imp.getNSlices()) {
             throw new IllegalArgumentException("The slice must be from 1 to " + imp.getNSlices() + ": " + slice);
@@ -236,6 +253,9 @@ public final class ImagePlusConverter {
                 case float[] plane -> builder.add(extra, plane);
                 default -> throw new IllegalArgumentException("Unsupported pixel type: " + pixels.getClass());
             }
+        }
+        if (bitsPerSample > 0) {
+            builder.bitsPerSample(bitsPerSample);
         }
         return builder.build();
     }
