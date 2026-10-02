@@ -1,6 +1,7 @@
 package panamage.jxl.imagej;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -26,7 +27,9 @@ import panamage.jxl.JxlExtraChannel;
  * extra channels become an RGB color image. In the other direction, the first
  * channel of an ImageJ image becomes the gray color channel of the JPEG XL
  * image and every further channel an extra channel, so that no color
- * transform touches the data; an RGB color image becomes red, green and blue.
+ * transform touches the data, unless the first three channels are stored as
+ * red, green and blue on request; an RGB color image becomes red, green and
+ * blue.
  * <p>
  * The pixel arrays are shared, not copied.
  */
@@ -46,37 +49,68 @@ public final class ImagePlusConverter {
      *         one channel
      */
     public static ImagePlus toImagePlus(String title, JxlChannels image) {
-        Objects.requireNonNull(title, "title");
         Objects.requireNonNull(image, "image");
-        int width = image.width();
-        int height = image.height();
-        if (ChannelLayout.isRgb(image)) {
-            List<byte[]> planes = ((JxlChannels.Uint8) image).planes();
-            ColorProcessor processor = new ColorProcessor(width, height);
-            processor.setRGB(planes.get(0), planes.get(1), planes.get(2));
-            return new ImagePlus(title, processor);
+        return toImagePlus(title, List.of(image), 1, 1, ChannelLayout.isRgb(image));
+    }
+
+    /**
+     * Converts the frames of a JPEG XL file to an ImageJ hyperstack.
+     *
+     * @param title     the title of the image
+     * @param positions one image per slice and time point, the slices of a
+     *                  time point one after the other; all with the same size,
+     *                  sample type and channels
+     * @param slices    the number of slices (Z)
+     * @param frames    the number of time points (T)
+     * @param rgb       whether 8-bit red, green and blue without extra
+     *                  channels become an RGB color image
+     * @return the ImageJ image
+     * @throws IllegalArgumentException if the images do not match each other
+     *                                  or the dimensions
+     */
+    static ImagePlus toImagePlus(String title, List<JxlChannels> positions, int slices, int frames, boolean rgb) {
+        Objects.requireNonNull(title, "title");
+        if (positions.isEmpty() || positions.size() != (long) slices * frames) {
+            throw new IllegalArgumentException(positions.size() + " images for " + slices + " slices and " + frames
+                    + " frames");
         }
+        JxlChannels first = positions.get(0);
+        rgb &= ChannelLayout.isRgb(first);
+        int width = first.width();
+        int height = first.height();
         ImageStack stack = new ImageStack(width, height);
-        switch (image) {
-            case JxlChannels.Uint8 img -> img.planes()
-                    .forEach(plane -> stack.addSlice(null, new ByteProcessor(width, height, plane)));
-            case JxlChannels.Uint16 img -> img.planes()
-                    .forEach(plane -> stack.addSlice(null, new ShortProcessor(width, height, plane, null)));
-            case JxlChannels.Float32 img -> img.planes()
-                    .forEach(plane -> stack.addSlice(null, new FloatProcessor(width, height, plane)));
+        for (JxlChannels image : positions) {
+            checkMatches(first, image);
+            if (rgb) {
+                List<byte[]> planes = ((JxlChannels.Uint8) image).planes();
+                ColorProcessor processor = new ColorProcessor(width, height);
+                processor.setRGB(planes.get(0), planes.get(1), planes.get(2));
+                stack.addSlice(null, processor);
+                continue;
+            }
+            switch (image) {
+                case JxlChannels.Uint8 img -> img.planes()
+                        .forEach(plane -> stack.addSlice(null, new ByteProcessor(width, height, plane)));
+                case JxlChannels.Uint16 img -> img.planes()
+                        .forEach(plane -> stack.addSlice(null, new ShortProcessor(width, height, plane, null)));
+                case JxlChannels.Float32 img -> img.planes()
+                        .forEach(plane -> stack.addSlice(null, new FloatProcessor(width, height, plane)));
+            }
         }
         ImagePlus imp = new ImagePlus(title, stack);
-        int channels = image.channels();
-        if (channels == 1) {
-            return imp;
-        }
-        imp.setDimensions(channels, 1, 1);
-        if (channels > CompositeImage.MAX_CHANNELS) {
+        int channels = rgb ? 1 : first.channels();
+        imp.setDimensions(channels, slices, frames);
+        if (imp.getNDimensions() > 3) {
             imp.setOpenAsHyperStack(true);
+        }
+        if (channels == 1 || channels > CompositeImage.MAX_CHANNELS) {
+            if (channels > 1) {
+                imp.setOpenAsHyperStack(true);
+            }
             return imp;
         }
         CompositeImage composite = new CompositeImage(imp, IJ.COMPOSITE);
-        if (image.colorChannels() == 3) {
+        if (first.colorChannels() == 3) {
             composite.setChannelLut(LUT.createLutFromColor(Color.RED), 1);
             composite.setChannelLut(LUT.createLutFromColor(Color.GREEN), 2);
             composite.setChannelLut(LUT.createLutFromColor(Color.BLUE), 3);
@@ -86,6 +120,14 @@ public final class ImagePlusConverter {
         // channel, and a new lookup table the range 0 to 0.
         composite.resetDisplayRanges();
         return composite;
+    }
+
+    private static void checkMatches(JxlChannels first, JxlChannels image) {
+        if (image.width() != first.width() || image.height() != first.height()
+                || image.sampleType() != first.sampleType() || image.colorChannels() != first.colorChannels()
+                || image.channels() != first.channels()) {
+            throw new IllegalArgumentException("All images must have the same size, sample type and channels");
+        }
     }
 
     /**
@@ -104,6 +146,29 @@ public final class ImagePlusConverter {
      *                                  more than one channel
      */
     public static JxlChannels toChannels(ImagePlus imp, int slice, int frame) {
+        return toChannels(imp, slice, frame, false);
+    }
+
+    /**
+     * Converts the channels of an ImageJ image at one slice and frame to a
+     * JPEG XL image, optionally with the first three channels as red, green
+     * and blue, for example for a color photograph opened as three channels.
+     * Otherwise, as {@link #toChannels(ImagePlus, int, int)}.
+     *
+     * @param imp   the ImageJ image
+     * @param slice the slice (Z), from 1 to the number of slices
+     * @param frame the frame (T), from 1 to the number of frames
+     * @param rgb   whether the first three channels become red, green and
+     *              blue, and every further channel an extra channel; an RGB
+     *              color image always becomes red, green and blue
+     * @return the JPEG XL image
+     * @throws IllegalArgumentException if the slice or frame is out of range,
+     *                                  the image is an RGB color image with
+     *                                  more than one channel, or {@code rgb}
+     *                                  is requested for fewer than three
+     *                                  channels
+     */
+    public static JxlChannels toChannels(ImagePlus imp, int slice, int frame, boolean rgb) {
         Objects.requireNonNull(imp, "imp");
         if (slice < 1 || slice > imp.getNSlices()) {
             throw new IllegalArgumentException("The slice must be from 1 to " + imp.getNSlices() + ": " + slice);
@@ -129,14 +194,44 @@ public final class ImagePlusConverter {
             processor.getRGB(red, green, blue);
             return builder.rgb(red, green, blue).build();
         }
+        if (rgb && channels < 3) {
+            throw new IllegalArgumentException("Red, green and blue need 3 channels: " + channels);
+        }
+        List<Object> planes = new ArrayList<>();
         for (int channel = 1; channel <= channels; channel++) {
-            Object pixels = stack.getPixels(imp.getStackIndex(channel, slice, frame));
-            boolean color = channel == 1;
-            JxlExtraChannel extra = JxlExtraChannel.of("");
+            planes.add(stack.getPixels(imp.getStackIndex(channel, slice, frame)));
+        }
+        int colorChannels = rgb ? 3 : 1;
+        switch (planes.get(0)) {
+            case byte[] plane -> {
+                if (rgb) {
+                    builder.rgb(plane, (byte[]) planes.get(1), (byte[]) planes.get(2));
+                } else {
+                    builder.gray(plane);
+                }
+            }
+            case short[] plane -> {
+                if (rgb) {
+                    builder.rgb(plane, (short[]) planes.get(1), (short[]) planes.get(2));
+                } else {
+                    builder.gray(plane);
+                }
+            }
+            case float[] plane -> {
+                if (rgb) {
+                    builder.rgb(plane, (float[]) planes.get(1), (float[]) planes.get(2));
+                } else {
+                    builder.gray(plane);
+                }
+            }
+            default -> throw new IllegalArgumentException("Unsupported pixel type: " + planes.get(0).getClass());
+        }
+        JxlExtraChannel extra = JxlExtraChannel.of("");
+        for (Object pixels : planes.subList(colorChannels, channels)) {
             switch (pixels) {
-                case byte[] plane -> builder = color ? builder.gray(plane) : builder.add(extra, plane);
-                case short[] plane -> builder = color ? builder.gray(plane) : builder.add(extra, plane);
-                case float[] plane -> builder = color ? builder.gray(plane) : builder.add(extra, plane);
+                case byte[] plane -> builder.add(extra, plane);
+                case short[] plane -> builder.add(extra, plane);
+                case float[] plane -> builder.add(extra, plane);
                 default -> throw new IllegalArgumentException("Unsupported pixel type: " + pixels.getClass());
             }
         }
