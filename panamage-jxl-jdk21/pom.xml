@@ -115,6 +115,29 @@
 						<arg>-Xlint:-preview</arg>
 					</compilerArgs>
 				</configuration>
+				<executions>
+					<!-- As in panamage-jxl-imageio: the Image I/O service providers are compiled for
+					     Java 8, so that older JVMs, and JDK 21 without enable-preview, can load them
+					     and they can deregister themselves instead of breaking Image I/O. -->
+					<execution>
+						<id>compile-service-providers</id>
+						<phase>compile</phase>
+						<goals>
+							<goal>compile</goal>
+						</goals>
+						<configuration>
+							<release>8</release>
+							<includes>
+								<include>panamage/jxl/imageio/JxlFormat.java</include>
+								<include>panamage/jxl/imageio/JxlImageReaderSpi.java</include>
+								<include>panamage/jxl/imageio/JxlImageWriterSpi.java</include>
+							</includes>
+							<compilerArgs combine.self="override">
+								<arg>-Xlint:-options</arg>
+							</compilerArgs>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -155,6 +178,7 @@
 						<panamage.jxl.cache.dir>${project.build.directory}/native-cache</panamage.jxl.cache.dir>
 						<panamage.jxl.library.path>${panamage.jxl.library.path}</panamage.jxl.library.path>
 						<panamage.jxl.conformance.dir>${conformance.dir}</panamage.jxl.conformance.dir>
+						<jdk8.home>${jdk8.home}</jdk8.home>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

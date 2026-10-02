@@ -68,6 +68,34 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<executions>
+					<!-- The Image I/O service providers are loaded by every JVM that has this JAR on
+					     the class path. Compiled for Java 8, they can be loaded by older JVMs as well
+					     and deregister themselves there, instead of breaking Image I/O for all
+					     formats. This execution overwrites their class files from default-compile. -->
+					<execution>
+						<id>compile-service-providers</id>
+						<phase>compile</phase>
+						<goals>
+							<goal>compile</goal>
+						</goals>
+						<configuration>
+							<release>8</release>
+							<includes>
+								<include>panamage/jxl/imageio/JxlFormat.java</include>
+								<include>panamage/jxl/imageio/JxlImageReaderSpi.java</include>
+								<include>panamage/jxl/imageio/JxlImageWriterSpi.java</include>
+							</includes>
+							<compilerArgs>
+								<arg>-Xlint:-options</arg>
+							</compilerArgs>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
 				<configuration>
 					<archive>
@@ -86,6 +114,8 @@
 					<argLine>--enable-native-access=panamage.jxl,ALL-UNNAMED</argLine>
 					<systemPropertyVariables>
 						<panamage.jxl.cache.dir>${project.build.directory}/native-cache</panamage.jxl.cache.dir>
+						<jdk8.home>${jdk8.home}</jdk8.home>
+						<jdk21.home>${jdk21.home}</jdk21.home>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

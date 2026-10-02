@@ -7,6 +7,7 @@
  */
 module panamage.jxl.imageio {
     requires java.desktop;
+    requires java.logging;
     requires panamage.jxl;
 
     exports panamage.jxl.imageio;

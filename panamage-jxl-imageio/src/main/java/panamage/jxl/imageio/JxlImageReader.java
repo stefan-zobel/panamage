@@ -94,6 +94,15 @@ public final class JxlImageReader extends ImageReader {
     }
 
     /**
+     * Creates a reader for {@link JxlImageReaderSpi#createReaderInstance};
+     * the declared return type keeps the Java 8 verifier from loading this
+     * class when it verifies the provider.
+     */
+    static ImageReader create(JxlImageReaderSpi provider) {
+        return new JxlImageReader(provider);
+    }
+
+    /**
      * Sets the limits for decoding images and reading metadata. They stay in
      * effect for later inputs, until {@link #reset()}.
      *

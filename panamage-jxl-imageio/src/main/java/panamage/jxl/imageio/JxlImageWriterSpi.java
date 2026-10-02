@@ -5,11 +5,16 @@ import java.util.Locale;
 import javax.imageio.ImageTypeSpecifier;
 import javax.imageio.ImageWriter;
 import javax.imageio.spi.ImageWriterSpi;
+import javax.imageio.spi.ServiceRegistry;
 import javax.imageio.stream.ImageOutputStream;
 
 /**
  * Service provider for {@link JxlImageWriter}, registered with Image I/O
  * automatically.
+ * <p>
+ * On a runtime that cannot run panamage, such as an older JVM or JDK 21
+ * without {@code --enable-preview} for panamage-jxl-jdk21, the provider
+ * removes itself from the registry, so the other formats keep working.
  */
 public final class JxlImageWriterSpi extends ImageWriterSpi {
 
@@ -18,10 +23,18 @@ public final class JxlImageWriterSpi extends ImageWriterSpi {
      */
     public JxlImageWriterSpi() {
         super(JxlFormat.VENDOR, JxlFormat.version(), JxlFormat.NAMES, JxlFormat.SUFFIXES, JxlFormat.MIME_TYPES,
-                JxlImageWriter.class.getName(), new Class<?>[] {ImageOutputStream.class},
-                new String[] {JxlImageReaderSpi.class.getName()},
+                JxlFormat.WRITER_CLASS, new Class<?>[] {ImageOutputStream.class},
+                new String[] {JxlFormat.READER_SPI_CLASS},
                 false, null, null, null, null,
                 false, null, null, null, null);
+    }
+
+    /**
+     * Removes the provider again if the runtime cannot run panamage.
+     */
+    @Override
+    public void onRegistration(ServiceRegistry registry, Class<?> category) {
+        JxlFormat.deregisterIfUnsupported(this, registry);
     }
 
     /**
@@ -36,7 +49,8 @@ public final class JxlImageWriterSpi extends ImageWriterSpi {
 
     @Override
     public ImageWriter createWriterInstance(Object extension) {
-        return new JxlImageWriter(this);
+        // Created in JxlImageWriter, so that verifying this class does not load it.
+        return JxlImageWriter.create(this);
     }
 
     @Override

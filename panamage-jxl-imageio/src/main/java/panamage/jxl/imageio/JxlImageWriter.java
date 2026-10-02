@@ -81,6 +81,15 @@ public final class JxlImageWriter extends ImageWriter {
         super(provider);
     }
 
+    /**
+     * Creates a writer for {@link JxlImageWriterSpi#createWriterInstance};
+     * the declared return type keeps the Java 8 verifier from loading this
+     * class when it verifies the provider.
+     */
+    static ImageWriter create(JxlImageWriterSpi provider) {
+        return new JxlImageWriter(provider);
+    }
+
     @Override
     public ImageWriteParam getDefaultWriteParam() {
         return new JxlImageWriteParam(getLocale());
