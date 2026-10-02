@@ -48,6 +48,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
     private final int channels;
     private final JxlSampleType type;
     private final MemorySegment info;
+    private final boolean srgb;
     private final MemorySegment format;
     private final MemorySegment header;
     private final List<JxlExtraChannelInfo> extraChannels;
@@ -55,17 +56,20 @@ public final class JxlFrameDecoder implements AutoCloseable {
     private JxlDecoder.ChannelBuffers buffers;
     private byte[] iccProfile;
     private boolean profileRead;
+    /** Whether libjxl accepted the conversion to sRGB. */
+    private boolean srgbOutput;
     private int nextIndex;
     private boolean finished;
     private boolean closed;
 
     private JxlFrameDecoder(Arena arena, NativeDecoder decoder, int channels, JxlSampleType type,
-            MemorySegment info) {
+            MemorySegment info, boolean srgb) {
         this.arena = arena;
         this.decoder = decoder;
         this.channels = channels;
         this.type = type;
         this.info = info;
+        this.srgb = srgb;
         this.format = channels == SEPARATE ? null : JxlDecoder.pixelFormat(channels, type, arena);
         this.header = arena.allocate(JxlFrameHeader.layout());
         this.extraChannels = channels == SEPARATE ? JxlDecoder.extraChannels(decoder.handle(), info, arena) : null;
@@ -106,8 +110,28 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * @throws JxlException             if the data is not a valid JPEG XL image
      */
     public static JxlFrameDecoder open(byte[] data, int channels, JxlSampleType type, JxlLimits limits) {
+        return open(data, channels, type, new JxlDecodeOptions(limits, false));
+    }
+
+    /**
+     * Like {@link #open(byte[], int, JxlSampleType)}, with the given options,
+     * for example to convert the pixels to sRGB.
+     *
+     * @param data     the encoded image; it is copied
+     * @param channels the number of channels to produce: 1 (gray), 2 (gray and
+     *                 alpha), 3 (RGB) or 4 (RGBA); alpha is opaque if the image
+     *                 has none
+     * @param type     the sample type to produce
+     * @param options  the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                 each frame and to every layer) and the color space
+     * @return the decoder, positioned before the first frame
+     * @throws IllegalArgumentException if {@code channels} is not 1 to 4
+     * @throws JxlLimitException        if a frame or layer exceeds the limits
+     * @throws JxlException             if the data is not a valid JPEG XL image
+     */
+    public static JxlFrameDecoder open(byte[] data, int channels, JxlSampleType type, JxlDecodeOptions options) {
         JxlDecoder.checkChannels(channels);
-        return open(data, channels, type, limits, false);
+        return open(data, channels, type, options, false);
     }
 
     /**
@@ -140,7 +164,24 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * @throws JxlException      if the data is not a valid JPEG XL image
      */
     public static JxlFrameDecoder openChannels(byte[] data, JxlSampleType type, JxlLimits limits) {
-        return open(data, SEPARATE, type, limits, false);
+        return openChannels(data, type, new JxlDecodeOptions(limits, false));
+    }
+
+    /**
+     * Like {@link #openChannels(byte[], JxlSampleType)}, with the given
+     * options, for example to convert the color channels to sRGB.
+     *
+     * @param data    the encoded image; it is copied
+     * @param type    the sample type to produce
+     * @param options the limits (only {@link JxlLimits#maxPixels()} applies, to
+     *                each frame and to every layer) and the color space
+     * @return the decoder, positioned before the first frame; use
+     *         {@link #nextChannels()} to decode the frames
+     * @throws JxlLimitException if a frame or layer exceeds the limits
+     * @throws JxlException      if the data is not a valid JPEG XL image
+     */
+    public static JxlFrameDecoder openChannels(byte[] data, JxlSampleType type, JxlDecodeOptions options) {
+        return open(data, SEPARATE, type, options, false);
     }
 
     /**
@@ -148,11 +189,12 @@ public final class JxlFrameDecoder implements AutoCloseable {
      * {@code allTogether}, the pixel limit also applies to all frames
      * together, for callers that keep every frame.
      */
-    static JxlFrameDecoder open(byte[] data, int channels, JxlSampleType type, JxlLimits limits,
+    static JxlFrameDecoder open(byte[] data, int channels, JxlSampleType type, JxlDecodeOptions options,
             boolean allTogether) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(type, "type");
-        Objects.requireNonNull(limits, "limits");
+        Objects.requireNonNull(options, "options");
+        JxlLimits limits = options.limits();
         if (channels != SEPARATE) {
             JxlDecoder.checkChannels(channels);
         }
@@ -166,6 +208,9 @@ public final class JxlFrameDecoder implements AutoCloseable {
             // JxlImage and JxlChannels promise straight alpha, also for images stored with premultiplied alpha.
             NativeDecoder.check(Jxl.JxlDecoderSetUnpremultiplyAlpha(handle, Jxl.JXL_TRUE()),
                     "JxlDecoderSetUnpremultiplyAlpha");
+            if (options.srgb()) {
+                JxlDecoder.setCms(handle);
+            }
             decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING() | Jxl.JXL_DEC_FRAME()
                     | Jxl.JXL_DEC_FULL_IMAGE(), input);
             int status = Jxl.JxlDecoderProcessInput(handle);
@@ -174,7 +219,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
             }
             MemorySegment info = JxlDecoder.basicInfo(handle, arena);
             JxlDecoder.checkImage(info, limits);
-            return new JxlFrameDecoder(arena, decoder, channels, type, info);
+            return new JxlFrameDecoder(arena, decoder, channels, type, info, options.srgb());
         } catch (RuntimeException | Error e) {
             if (decoder != null) {
                 decoder.close();
@@ -244,7 +289,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
                 frame = JxlDecoder.frameInfo(handle, info, header);
             } else if (status == Jxl.JXL_DEC_COLOR_ENCODING()) {
                 // The profile is read after the first frame, when it describes the produced pixels.
-                continue;
+                srgbOutput = srgb && JxlDecoder.requestSrgb(handle, info, arena);
             } else if (status == Jxl.JXL_DEC_NEED_IMAGE_OUT_BUFFER()) {
                 if (channels == SEPARATE) {
                     buffers = JxlDecoder.ChannelBuffers.set(handle, info, type, buffers, arena);
@@ -253,7 +298,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
                 }
             } else if (status == Jxl.JXL_DEC_FULL_IMAGE() && frame != null) {
                 if (!profileRead) {
-                    iccProfile = JxlDecoder.outputProfile(handle, false, arena);
+                    iccProfile = srgbOutput ? null : JxlDecoder.outputProfile(handle, false, arena);
                     profileRead = true;
                 }
                 nextIndex++;

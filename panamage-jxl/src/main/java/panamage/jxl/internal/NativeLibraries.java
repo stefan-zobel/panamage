@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
@@ -61,6 +62,11 @@ public final class NativeLibraries {
         static final Loaded LOADED = load();
     }
 
+    /** Looks up the default color management system on first use. */
+    private static final class Cms {
+        static final MemorySegment DEFAULT = defaultCms(lookup());
+    }
+
     private NativeLibraries() {
     }
 
@@ -73,6 +79,19 @@ public final class NativeLibraries {
      */
     public static SymbolLookup lookup() {
         return Holder.LOADED.lookup();
+    }
+
+    /**
+     * Returns libjxl's default color management system, the
+     * {@code JxlCmsInterface} of libjxl_cms ({@code JxlGetDefaultCms}), for
+     * {@code JxlDecoderSetCms}, loading the libraries on first use.
+     *
+     * @return the address of the interface, or {@link MemorySegment#NULL} if
+     *         libjxl_cms is not loaded (a system libjxl without it)
+     * @throws UnsatisfiedLinkError if no suitable libjxl can be loaded
+     */
+    public static MemorySegment defaultCms() {
+        return Cms.DEFAULT;
     }
 
     /**
@@ -154,7 +173,8 @@ public final class NativeLibraries {
 
     /**
      * Loads libjxl through the operating system's library search, trying the
-     * versioned name (the SONAME on Linux) before the plain name.
+     * versioned name (the SONAME on Linux) before the plain name. libjxl_cms
+     * is optional; without it, there is no color management.
      */
     private static Loaded fromSystem() {
         String platform = Platform.current();
@@ -162,23 +182,37 @@ public final class NativeLibraries {
         SymbolLookup lookup = null;
         for (String name : Platform.REQUIRED_LIBRARY_NAMES) {
             List<String> candidates = Platform.fileNames(platform, name);
-            SymbolLookup library = null;
-            for (String candidate : candidates) {
-                try {
-                    library = SymbolLookup.libraryLookup(candidate, Arena.global());
-                    loaded.add(candidate);
-                    break;
-                } catch (IllegalArgumentException e) {
-                    // Try the next name.
-                }
-            }
+            SymbolLookup library = openFirst(candidates, loaded);
             if (library == null) {
                 throw new IllegalArgumentException("Cannot open library: " + String.join(" or ", candidates));
             }
             lookup = lookup == null ? library : lookup.or(library);
         }
         checkVersion(lookup);
+        SymbolLookup cms = openFirst(Platform.fileNames(platform, Platform.CMS_LIBRARY_NAME), loaded);
+        if (cms != null) {
+            lookup = lookup.or(cms);
+        }
         return new Loaded(lookup, "system " + String.join(", ", loaded));
+    }
+
+    /**
+     * Opens the first of the given libraries the operating system finds and
+     * adds its name to {@code loaded}.
+     *
+     * @return the library, or {@code null} if none was found
+     */
+    private static SymbolLookup openFirst(List<String> candidates, List<String> loaded) {
+        for (String candidate : candidates) {
+            try {
+                SymbolLookup library = SymbolLookup.libraryLookup(candidate, Arena.global());
+                loaded.add(candidate);
+                return library;
+            } catch (IllegalArgumentException e) {
+                // Try the next name.
+            }
+        }
+        return null;
     }
 
     /** Loads the libraries in the given order and checks the libjxl version. */
@@ -215,6 +249,25 @@ public final class NativeLibraries {
             return (int) handle.invokeExact();
         } catch (Throwable t) {
             throw new IllegalStateException("JxlDecoderVersion failed", t);
+        }
+    }
+
+    /**
+     * Calls {@code JxlGetDefaultCms}. It is called here instead of through the
+     * generated bindings, because jxl/cms.h declares it without a prototype,
+     * which jextract binds as a variadic function.
+     */
+    private static MemorySegment defaultCms(SymbolLookup lookup) {
+        Optional<MemorySegment> function = lookup.find("JxlGetDefaultCms");
+        if (function.isEmpty()) {
+            return MemorySegment.NULL;
+        }
+        MethodHandle handle = Linker.nativeLinker().downcallHandle(function.get(),
+                FunctionDescriptor.of(ValueLayout.ADDRESS));
+        try {
+            return (MemorySegment) handle.invokeExact();
+        } catch (Throwable t) {
+            throw new IllegalStateException("JxlGetDefaultCms failed", t);
         }
     }
 

@@ -114,6 +114,7 @@
 					<argLine>--enable-native-access=panamage.jxl,ALL-UNNAMED</argLine>
 					<systemPropertyVariables>
 						<panamage.jxl.cache.dir>${project.build.directory}/native-cache</panamage.jxl.cache.dir>
+						<panamage.jxl.conformance.dir>${conformance.dir}</panamage.jxl.conformance.dir>
 						<jdk8.home>${jdk8.home}</jdk8.home>
 						<jdk21.home>${jdk21.home}</jdk21.home>
 					</systemPropertyVariables>

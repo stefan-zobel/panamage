@@ -84,7 +84,7 @@ class ConformanceTest {
         int[] shape = reference.shape();
         assertEquals(4, shape.length, name + ": reference shape " + Arrays.toString(shape));
         JxlImage.Float32 image = (JxlImage.Float32) JxlDecoder.decode(input, info.channels(), JxlSampleType.FLOAT32,
-                JxlLimits.defaults(), true);
+                JxlDecodeOptions.defaults(), true);
         assertEquals(shape[1], image.height(), name + ": height");
         assertEquals(shape[2], image.width(), name + ": width");
 

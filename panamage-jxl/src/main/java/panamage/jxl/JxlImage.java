@@ -51,7 +51,8 @@ public sealed interface JxlImage permits JxlImage.Uint8, JxlImage.Uint16, JxlIma
     int channels();
 
     /**
-     * Returns the ICC profile of the samples.
+     * Returns the ICC profile of the samples. Decoded images are sRGB if
+     * decoded with {@link JxlDecodeOptions#withSrgb(boolean)}.
      *
      * @return the ICC profile, or {@code null} for sRGB
      */

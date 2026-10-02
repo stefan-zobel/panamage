@@ -25,6 +25,9 @@ final class Platform {
     /** Libraries that must be present when loading from a directory or the system. */
     static final List<String> REQUIRED_LIBRARY_NAMES = List.of("jxl", "jxl_threads");
 
+    /** The library with libjxl's color management system, optional on the system. */
+    static final String CMS_LIBRARY_NAME = "jxl_cms";
+
     /** Whether the running JVM uses the musl C library, determined once. */
     private static final class Libc {
         static final boolean MUSL = runsOnMusl();
