@@ -97,11 +97,13 @@ def developer_environment(vs: Path) -> dict[str, str]:
         raise SystemExit(f"{vcvars} not found")
     result = subprocess.run(f'cmd /d /s /c ""{vcvars}" >nul && set"', capture_output=True, text=True,
                             check=True)
+    # Names of environment variables are case-insensitive on Windows (PATH may come as Path);
+    # os.environ keeps them in upper case as well.
     environment = {}
     for line in result.stdout.splitlines():
         name, sep, value = line.partition("=")
         if sep and name:
-            environment[name] = value
+            environment[name.upper()] = value
     # clang-cl is part of the C++ Clang tools, which vcvars does not put on the PATH. CMake and
     # Ninja of Visual Studio go first as well, ahead of other installations on the PATH.
     llvm = vs / "VC" / "Tools" / "Llvm" / "x64" / "bin"
