@@ -313,6 +313,17 @@ class JxlImageReaderTest {
         return image;
     }
 
+    /** Reads an image in its own color space, without the conversion to sRGB. */
+    static BufferedImage readOriginal(byte[] data) throws IOException {
+        JxlImageReader reader = reader(data);
+        reader.setConvertToSrgb(false);
+        try {
+            return reader.read(0);
+        } finally {
+            reader.dispose();
+        }
+    }
+
     static int[] argb(BufferedImage image) {
         return image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
     }

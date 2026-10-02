@@ -1,11 +1,13 @@
 package panamage.jxl.imageio;
 
 import java.awt.color.ColorSpace;
+import java.awt.color.ICC_ColorSpace;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +20,7 @@ import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.stream.ImageInputStream;
 
 import panamage.jxl.JxlAnimationInfo;
+import panamage.jxl.JxlDecodeOptions;
 import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlException;
 import panamage.jxl.JxlFrame;
@@ -37,8 +40,20 @@ import panamage.jxl.JxlSampleType;
  * bits) as floats. 8-bit sRGB images become {@code TYPE_BYTE_GRAY},
  * {@code TYPE_3BYTE_BGR} or {@code TYPE_4BYTE_ABGR}, 16-bit sRGB gray images
  * {@code TYPE_USHORT_GRAY}; all others use a component color model with
- * interleaved samples. Images in another color space than sRGB (typically
- * lossless wide-gamut images) keep their ICC profile in the color model.
+ * interleaved samples.
+ * <p>
+ * Images in another color space than sRGB (such as Display P3, Adobe RGB,
+ * linear RGB or gray with its own profile) are converted to sRGB by libjxl's
+ * color management, so they get the standard types above and look right in
+ * any code that assumes sRGB. Colors outside the sRGB gamut are clipped (or
+ * kept beyond 0.0 to 1.0 with floating point samples). To keep the color
+ * space of the image instead, with its ICC profile in the color model, call
+ * {@link #setConvertToSrgb(boolean) setConvertToSrgb(false)}, or choose a
+ * destination type with that color space from {@link #getImageTypes}.
+ * {@snippet :
+ * JxlImageReader reader = (JxlImageReader) ImageIO.getImageReadersByFormatName("jxl").next();
+ * reader.setConvertToSrgb(false);
+ * }
  * <p>
  * Each frame of an animation is an image: {@link #getNumImages(boolean)}
  * returns the number of frames (or -1 without {@code allowSearch}, until the
@@ -54,10 +69,11 @@ import panamage.jxl.JxlSampleType;
  * for display.
  * <p>
  * {@link ImageReadParam} source regions and subsampling are supported, and
- * {@link ImageReadParam#setDestinationType} selects another precision from
- * {@link #getImageTypes}, for example 8 bits for a 16-bit image. Destination
- * images and band selection are ignored. Image metadata
- * ({@link JxlImageMetadata}) provides EXIF, XMP and the ICC profile.
+ * {@link ImageReadParam#setDestinationType} selects another precision or
+ * color space from {@link #getImageTypes}, for example 8 bits for a 16-bit
+ * image. Destination images and band selection are ignored. Image metadata
+ * ({@link JxlImageMetadata}) provides EXIF, XMP and the ICC profile of the
+ * image, also if its pixels are converted to sRGB.
  * <p>
  * Images and metadata boxes beyond the reader's {@link JxlLimits} (by default
  * {@link JxlLimits#defaults()}: 256 megapixels and 16 MiB per metadata box)
@@ -74,8 +90,12 @@ public final class JxlImageReader extends ImageReader {
     private static final int READ_CHUNK_SIZE = 64 * 1024;
 
     private JxlLimits limits = JxlLimits.defaults();
+    private boolean convertToSrgb = true;
     private byte[] data;
     private JxlImageInfo info;
+    /** The color space of the image if it is not sRGB, once read; see {@link #originalSpace()}. */
+    private ColorSpace originalSpace;
+    private boolean originalSpaceRead;
     private JxlAnimationInfo animation;
     private JxlMetadata boxes;
 
@@ -83,6 +103,11 @@ public final class JxlImageReader extends ImageReader {
     private JxlFrameDecoder frames;
     private JxlSampleType framesType;
     private JxlLimits framesLimits;
+    private boolean framesSrgb;
+
+    /** The sample type and color space of the decoded pixels. */
+    private record Target(JxlSampleType type, boolean srgb) {
+    }
 
     /**
      * Creates a reader; usually called through {@link JxlImageReaderSpi}.
@@ -121,6 +146,29 @@ public final class JxlImageReader extends ImageReader {
         return limits;
     }
 
+    /**
+     * Sets whether images in another color space than sRGB are converted to
+     * sRGB, if no destination type is given. The setting stays in effect for
+     * later inputs, until {@link #reset()}.
+     *
+     * @param convertToSrgb {@code true} (the default) to convert the pixels to
+     *                      sRGB, {@code false} to keep the color space of the
+     *                      image
+     */
+    public void setConvertToSrgb(boolean convertToSrgb) {
+        this.convertToSrgb = convertToSrgb;
+    }
+
+    /**
+     * Returns whether images in another color space than sRGB are converted
+     * to sRGB.
+     *
+     * @return {@code true} if the pixels are converted to sRGB
+     */
+    public boolean isConvertToSrgb() {
+        return convertToSrgb;
+    }
+
     @Override
     public void setInput(Object input, boolean seekForwardOnly, boolean ignoreMetadata) {
         super.setInput(input, seekForwardOnly, ignoreMetadata);
@@ -155,39 +203,70 @@ public final class JxlImageReader extends ImageReader {
 
     /**
      * Returns the type with the precision of the image first, followed by the
-     * types with the other sample types (8-bit, 16-bit, floating point).
+     * types with the other sample types (8-bit, 16-bit, floating point). For
+     * an image in another color space than sRGB, these types are in sRGB if
+     * the reader converts to sRGB, followed by the same types in the color
+     * space of the image; otherwise the other way round.
      */
     @Override
     public Iterator<ImageTypeSpecifier> getImageTypes(int imageIndex) throws IOException {
         checkIndex(imageIndex);
-        JxlImageInfo imageInfo = info();
-        ColorSpace iccSpace = iccColorSpace(imageInfo.iccProfile(), imageInfo.channels());
+        ColorSpace original = originalSpace();
         List<ImageTypeSpecifier> types = new ArrayList<>();
-        types.add(BufferedImages.imageType(imageInfo.channels(), imageInfo.sampleType(), iccSpace));
-        for (JxlSampleType type : JxlSampleType.values()) {
-            if (type != imageInfo.sampleType()) {
-                types.add(BufferedImages.imageType(imageInfo.channels(), type, iccSpace));
-            }
+        if (original == null) {
+            addImageTypes(types, null);
+        } else if (convertToSrgb) {
+            addImageTypes(types, null);
+            addImageTypes(types, original);
+        } else {
+            addImageTypes(types, original);
+            addImageTypes(types, null);
         }
         return types.iterator();
     }
 
+    /** Adds the types of all sample types in the given color space, or in sRGB for {@code null}. */
+    private void addImageTypes(List<ImageTypeSpecifier> types, ColorSpace space) throws IOException {
+        JxlImageInfo imageInfo = info();
+        types.add(BufferedImages.imageType(imageInfo.channels(), imageInfo.sampleType(), space));
+        for (JxlSampleType type : JxlSampleType.values()) {
+            if (type != imageInfo.sampleType()) {
+                types.add(BufferedImages.imageType(imageInfo.channels(), type, space));
+            }
+        }
+    }
+
     /**
-     * Returns the sample type selected by the data type of the parameter's
-     * destination type, or the sample type of the image.
+     * Returns the sample type and color space for the parameter's destination
+     * type: the sample type of its data type, and sRGB unless it has the color
+     * space of the image. Without a destination type, the image keeps its
+     * sample type and is converted as set with
+     * {@link #setConvertToSrgb(boolean)}. Images that are sRGB need no
+     * conversion.
      */
-    private JxlSampleType sampleType(ImageReadParam param) throws IOException {
+    private Target target(ImageReadParam param) throws IOException {
+        boolean srgbImage = info().iccProfile() == null;
         ImageTypeSpecifier destinationType = param == null ? null : param.getDestinationType();
         if (destinationType == null) {
-            return info().sampleType();
+            return new Target(info().sampleType(), !srgbImage && convertToSrgb);
         }
-        // Only the data type matters: color spaces from ICC profiles do not compare equal.
-        return switch (destinationType.getSampleModel().getDataType()) {
+        JxlSampleType type = switch (destinationType.getSampleModel().getDataType()) {
             case DataBuffer.TYPE_BYTE -> JxlSampleType.UINT8;
             case DataBuffer.TYPE_USHORT -> JxlSampleType.UINT16;
             case DataBuffer.TYPE_FLOAT -> JxlSampleType.FLOAT32;
             default -> throw new IIOException("Unsupported destination type; use one of getImageTypes");
         };
+        ColorSpace space = destinationType.getColorModel().getColorSpace();
+        return new Target(type, !srgbImage && !sameSpace(space, originalSpace()));
+    }
+
+    /**
+     * Compares a color space with the one of the image (which may be
+     * {@code null}) by their ICC profiles, which do not compare equal.
+     */
+    private static boolean sameSpace(ColorSpace space, ColorSpace original) {
+        return space == original || space instanceof ICC_ColorSpace icc && original instanceof ICC_ColorSpace other
+                && Arrays.equals(icc.getProfile().getData(), other.getProfile().getData());
     }
 
     @Override
@@ -197,8 +276,9 @@ public final class JxlImageReader extends ImageReader {
 
     /**
      * Returns the EXIF and XMP metadata, for images that are not sRGB the ICC
-     * profile and for animations the duration and name of the frame, as
-     * read-only {@link JxlImageMetadata}.
+     * profile (also if the pixels are converted to sRGB) and for animations
+     * the duration and name of the frame, as read-only
+     * {@link JxlImageMetadata}.
      */
     @Override
     public IIOMetadata getImageMetadata(int imageIndex) throws IOException {
@@ -222,7 +302,7 @@ public final class JxlImageReader extends ImageReader {
         clearAbortRequest();
         processImageStarted(imageIndex);
         JxlImageInfo imageInfo = info();
-        JxlSampleType type = sampleType(param);
+        Target target = target(param);
         if (abortRequested()) {
             processReadAborted();
             return null;
@@ -230,15 +310,18 @@ public final class JxlImageReader extends ImageReader {
 
         JxlImage decoded;
         try {
-            decoded = imageInfo.animated() ? readFrame(imageIndex, imageInfo.channels(), type)
-                    : JxlDecoder.decode(data(), imageInfo.channels(), type, limits);
+            decoded = imageInfo.animated() ? readFrame(imageIndex, imageInfo.channels(), target)
+                    : JxlDecoder.decode(data(), imageInfo.channels(), target.type(),
+                            new JxlDecodeOptions(limits, target.srgb()));
         } catch (JxlException e) {
             closeFrames();
             throw new IIOException("Cannot decode JPEG XL image: " + e.getMessage(), e);
         }
         processImageProgress(90.0f);
 
-        ColorSpace iccSpace = iccColorSpace(decoded.iccProfile(), decoded.channels());
+        // The same instance as in the types from getImageTypes, if the pixels keep the color space of the image.
+        ColorSpace iccSpace = Arrays.equals(decoded.iccProfile(), imageInfo.iccProfile())
+                ? originalSpace() : iccColorSpace(decoded.iccProfile(), decoded.channels());
         BufferedImage image = BufferedImages.applySourceRegion(
                 BufferedImages.toBufferedImage(decoded, iccSpace), param);
         if (abortRequested()) {
@@ -254,11 +337,13 @@ public final class JxlImageReader extends ImageReader {
      * Decodes a frame of an animation, continuing with the open frame decoder
      * if the frame comes after the last one read.
      */
-    private JxlImage readFrame(int index, int channels, JxlSampleType type) throws IOException {
-        if (frames == null || framesType != type || !framesLimits.equals(limits) || frames.nextIndex() > index) {
+    private JxlImage readFrame(int index, int channels, Target target) throws IOException {
+        if (frames == null || framesType != target.type() || framesSrgb != target.srgb()
+                || !framesLimits.equals(limits) || frames.nextIndex() > index) {
             closeFrames();
-            frames = JxlFrameDecoder.open(data(), channels, type, limits);
-            framesType = type;
+            frames = JxlFrameDecoder.open(data(), channels, target.type(), new JxlDecodeOptions(limits, target.srgb()));
+            framesType = target.type();
+            framesSrgb = target.srgb();
             framesLimits = limits;
         }
         frames.skip(index - frames.nextIndex());
@@ -269,11 +354,12 @@ public final class JxlImageReader extends ImageReader {
         return frame.image();
     }
 
-    /** Also restores the default limits. */
+    /** Also restores the default limits and the conversion to sRGB. */
     @Override
     public void reset() {
         super.reset();
         limits = JxlLimits.defaults();
+        convertToSrgb = true;
         clear();
     }
 
@@ -286,6 +372,8 @@ public final class JxlImageReader extends ImageReader {
         closeFrames();
         data = null;
         info = null;
+        originalSpace = null;
+        originalSpaceRead = false;
         animation = null;
         boxes = null;
     }
@@ -299,6 +387,21 @@ public final class JxlImageReader extends ImageReader {
 
     private ColorSpace iccColorSpace(byte[] iccProfile, int channels) {
         return BufferedImages.iccColorSpace(iccProfile, channels, this::processWarningOccurred);
+    }
+
+    /**
+     * Returns the color space of the image, or {@code null} if it is sRGB or
+     * its profile cannot be used. Read once per input, so a warning about the
+     * profile is reported once, and the destination types from
+     * {@link #getImageTypes} share the instance.
+     */
+    private ColorSpace originalSpace() throws IOException {
+        if (!originalSpaceRead) {
+            JxlImageInfo imageInfo = info();
+            originalSpace = iccColorSpace(imageInfo.iccProfile(), imageInfo.channels());
+            originalSpaceRead = true;
+        }
+        return originalSpace;
     }
 
     private void checkIndex(int imageIndex) throws IOException {

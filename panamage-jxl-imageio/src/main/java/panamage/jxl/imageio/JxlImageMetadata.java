@@ -144,7 +144,9 @@ public final class JxlImageMetadata extends IIOMetadata {
     }
 
     /**
-     * Returns the ICC profile of the decoded pixels if they are not sRGB.
+     * Returns the ICC profile of the image if it is not sRGB. It describes the
+     * pixels that {@link JxlImageReader} returns when it keeps the color space
+     * of the image ({@link JxlImageReader#setConvertToSrgb(boolean)}).
      *
      * @return a copy of the profile, or {@code null} for sRGB or metadata for writing
      */

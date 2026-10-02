@@ -11,19 +11,31 @@ import java.awt.color.ColorSpace;
 import java.awt.color.ICC_ColorSpace;
 import java.awt.color.ICC_Profile;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
+import javax.imageio.ImageTypeSpecifier;
 
 import org.junit.jupiter.api.Test;
 
+import panamage.jxl.JxlAnimationHeader;
 import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlEncodeOptions;
 import panamage.jxl.JxlEncoder;
+import panamage.jxl.JxlFrame;
+import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImage;
+import panamage.jxl.JxlMetadata;
 
 /**
- * Images whose pixels are not sRGB, using Java's built-in linear RGB profile.
+ * Images whose pixels are not sRGB, using Java's built-in linear RGB profile:
+ * the reader converts them to sRGB unless asked to keep their color space.
  */
 class IccProfileTest {
 
@@ -47,11 +59,21 @@ class IccProfileTest {
     }
 
     @Test
-    void imageReaderAttachesTheProfile() throws IOException {
+    void imageReaderConvertsToSrgbByDefault() throws IOException {
+        byte[] encoded = JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofLossless());
+
+        BufferedImage image = JxlImageReaderTest.read(encoded);
+
+        assertEquals(BufferedImage.TYPE_3BYTE_BGR, image.getType());
+        assertSrgbRamp(image);
+    }
+
+    @Test
+    void imageReaderKeepsTheProfileOnRequest() throws IOException {
         JxlImage.Uint8 linear = linearRgbImage();
         byte[] encoded = JxlEncoder.encode(linear, JxlEncodeOptions.ofLossless());
 
-        BufferedImage image = JxlImageReaderTest.read(encoded);
+        BufferedImage image = JxlImageReaderTest.readOriginal(encoded);
 
         ColorSpace space = image.getColorModel().getColorSpace();
         assertInstanceOf(ICC_ColorSpace.class, space);
@@ -83,15 +105,120 @@ class IccProfileTest {
     @Test
     void imageTypesMatchTheDecodedImage() throws IOException {
         byte[] encoded = JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofLossless());
-        JxlImageReader reader = new JxlImageReader(new JxlImageReaderSpi());
-        reader.setInput(javax.imageio.ImageIO.createImageInputStream(new java.io.ByteArrayInputStream(encoded)));
+        for (boolean convert : new boolean[] {true, false}) {
+            JxlImageReader reader = reader(encoded);
+            reader.setConvertToSrgb(convert);
 
-        var type = reader.getImageTypes(0).next();
+            ImageTypeSpecifier type = reader.getImageTypes(0).next();
+            BufferedImage image = reader.read(0);
+
+            assertEquals(convert, type.getColorModel().getColorSpace().isCS_sRGB());
+            assertEquals(type.getColorModel().getColorSpace(), image.getColorModel().getColorSpace());
+            assertEquals(type.getNumBands(), image.getRaster().getNumBands());
+        }
+    }
+
+    @Test
+    void imageTypesListTheSrgbTypesAndTheTypesOfTheImage() throws IOException {
+        byte[] encoded = JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofLossless());
+        JxlImageReader reader = reader(encoded);
+
+        List<ImageTypeSpecifier> converted = types(reader);
+        reader.setConvertToSrgb(false);
+        List<ImageTypeSpecifier> original = types(reader);
+
+        // Three sample types, each in sRGB and in the color space of the image.
+        assertEquals(6, converted.size());
+        assertEquals(BufferedImage.TYPE_3BYTE_BGR, converted.get(0).getBufferedImageType());
+        for (int i = 0; i < 6; i++) {
+            assertEquals(i < 3, converted.get(i).getColorModel().getColorSpace().isCS_sRGB(), "type " + i);
+            assertEquals(i >= 3, original.get(i).getColorModel().getColorSpace().isCS_sRGB(), "type " + i);
+        }
+        assertEquals(converted.get(3).getColorModel(), original.get(0).getColorModel());
+    }
+
+    @Test
+    void destinationTypesSelectTheColorSpace() throws IOException {
+        JxlImage.Uint8 linear = linearRgbImage();
+        byte[] encoded = JxlEncoder.encode(linear, JxlEncodeOptions.ofLossless());
+        JxlImageReader reader = reader(encoded);
+        ImageReadParam param = reader.getDefaultReadParam();
+
+        param.setDestinationType(types(reader).get(3));
+        BufferedImage original = reader.read(0, param);
+        reader.setConvertToSrgb(false);
+        param.setDestinationType(ImageTypeSpecifier.createFromBufferedImageType(BufferedImage.TYPE_3BYTE_BGR));
+        BufferedImage srgb = reader.read(0, param);
+
+        assertFalse(original.getColorModel().getColorSpace().isCS_sRGB());
+        assertArrayEquals(linear.pixels(), (byte[]) original.getRaster().getDataElements(0, 0, WIDTH, HEIGHT, null));
+        assertSrgbRamp(srgb);
+    }
+
+    @Test
+    void resetRestoresTheConversion() throws IOException {
+        JxlImageReader reader = reader(JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofLossless()));
+        reader.setConvertToSrgb(false);
+
+        reader.reset();
+
+        assertTrue(reader.isConvertToSrgb());
+    }
+
+    @Test
+    void metadataKeepsTheProfileOfTheImage() throws IOException {
+        byte[] encoded = JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofLossless());
+        JxlImageReader reader = reader(encoded);
+
         BufferedImage image = reader.read(0);
+        JxlImageMetadata metadata = (JxlImageMetadata) reader.getImageMetadata(0);
 
-        assertNotNull(type.getColorModel());
-        assertEquals(type.getColorModel().getColorSpace().getType(), image.getColorModel().getColorSpace().getType());
-        assertEquals(type.getNumBands(), image.getRaster().getNumBands());
+        assertTrue(image.getColorModel().getColorSpace().isCS_sRGB());
+        assertNotNull(metadata.getIccProfile());
+        assertEquals(ColorSpace.TYPE_RGB, ICC_Profile.getInstance(metadata.getIccProfile()).getColorSpaceType());
+    }
+
+    @Test
+    void framesSwitchBetweenTheColorSpaces() throws IOException {
+        JxlImage.Uint8 linear = linearRgbImage();
+        JxlFrameInfo info = new JxlFrameInfo(100, 100.0, "");
+        byte[] encoded = JxlEncoder.encodeAnimation(List.of(new JxlFrame(linear, info), new JxlFrame(linear, info)),
+                JxlAnimationHeader.millis(0), JxlEncodeOptions.ofLossless(), JxlMetadata.NONE);
+        JxlImageReader reader = reader(encoded);
+        ImageReadParam param = reader.getDefaultReadParam();
+        param.setDestinationType(types(reader).get(3));
+
+        BufferedImage first = reader.read(0);
+        BufferedImage second = reader.read(1, param);
+        BufferedImage again = reader.read(1);
+
+        assertSrgbRamp(first);
+        assertFalse(second.getColorModel().getColorSpace().isCS_sRGB());
+        assertArrayEquals(linear.pixels(), (byte[]) second.getRaster().getDataElements(0, 0, WIDTH, HEIGHT, null));
+        assertSrgbRamp(again);
+    }
+
+    /** Checks the sRGB values of the linear ramp: linear 128 is 188 in sRGB. */
+    private static void assertSrgbRamp(BufferedImage image) {
+        assertTrue(image.getColorModel().getColorSpace().isCS_sRGB());
+        int x = 8;
+        int rgb = image.getRGB(x, 0);
+        for (int shift : new int[] {0, 8, 16}) {
+            int value = (rgb >> shift) & 0xFF;
+            assertTrue(Math.abs(value - 188) <= 1, "sRGB value " + value);
+        }
+    }
+
+    private static JxlImageReader reader(byte[] encoded) throws IOException {
+        JxlImageReader reader = new JxlImageReader(new JxlImageReaderSpi());
+        reader.setInput(ImageIO.createImageInputStream(new ByteArrayInputStream(encoded)));
+        return reader;
+    }
+
+    private static List<ImageTypeSpecifier> types(JxlImageReader reader) throws IOException {
+        List<ImageTypeSpecifier> types = new ArrayList<>();
+        reader.getImageTypes(0).forEachRemaining(types::add);
+        return types;
     }
 
     /** A gray ramp from 0 to 240 in linear RGB, as RGB samples. */

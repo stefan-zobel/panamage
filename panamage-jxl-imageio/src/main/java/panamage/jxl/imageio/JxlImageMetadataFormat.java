@@ -9,8 +9,8 @@ import javax.imageio.metadata.IIOMetadataFormatImpl;
  * <p>
  * The root element has up to three children without attributes, each holding
  * a {@code byte[]} as user object: {@code Exif} (TIFF data), {@code XMP} (XML
- * bytes) and {@code ICCProfile} (read only; present if the decoded pixels are
- * not sRGB).
+ * bytes) and {@code ICCProfile} (read only; present if the image is not
+ * sRGB, also if the reader converts its pixels to sRGB).
  * <p>
  * For a frame of an animation, the root also has an {@code Animation} element
  * with the attributes {@code frameIndex}, {@code durationMillis},

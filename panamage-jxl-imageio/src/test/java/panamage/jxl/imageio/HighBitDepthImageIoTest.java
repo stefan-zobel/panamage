@@ -219,7 +219,7 @@ class HighBitDepthImageIoTest {
         byte[] encoded = JxlImageWriterTest.write(source, lossless());
 
         assertNotNull(JxlDecoder.readInfo(encoded).iccProfile());
-        BufferedImage decoded = JxlImageReaderTest.read(encoded);
+        BufferedImage decoded = JxlImageReaderTest.readOriginal(encoded);
         assertInstanceOf(ICC_ColorSpace.class, decoded.getColorModel().getColorSpace());
         assertFalse(decoded.getColorModel().getColorSpace().isCS_sRGB());
         assertArrayEquals(reference, samples(decoded.getRaster()));
@@ -237,7 +237,7 @@ class HighBitDepthImageIoTest {
         JxlImageInfo info = JxlDecoder.readInfo(encoded);
         assertEquals(JxlSampleType.UINT16, info.sampleType());
         assertNotNull(info.iccProfile());
-        assertArrayEquals(gradient16Samples(), samples(JxlImageReaderTest.read(encoded).getRaster()));
+        assertArrayEquals(gradient16Samples(), samples(JxlImageReaderTest.readOriginal(encoded).getRaster()));
     }
 
     @Test
