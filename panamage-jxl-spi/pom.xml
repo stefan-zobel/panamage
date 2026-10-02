@@ -12,4 +12,9 @@
 	<artifactId>panamage-jxl-spi</artifactId>
 	<name>panamage-jxl-spi</name>
 	<description>Service interface through which platform-specific artifacts provide the native libjxl libraries</description>
+
+	<properties>
+		<!-- Without the Foreign Function and Memory API, so that panamage-jxl-jdk21 can use it too. -->
+		<maven.compiler.release>21</maven.compiler.release>
+	</properties>
 </project>

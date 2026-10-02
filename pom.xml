@@ -59,6 +59,10 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.release>25</maven.compiler.release>
+		<!-- The JDK that compiles and tests. It can be newer than the release: panamage-jxl-spi and
+		     the native bundles are compiled for release 21 with it, so that panamage-jxl-jdk21 can
+		     use them too. -->
+		<toolchain.jdk.version>25</toolchain.jdk.version>
 		<!-- Directory with the external tools, see scripts/fetch_tools.py: .tools in the
 		     project by default, or the PANAMAGE_TOOLS_DIR environment variable, or -Dtools.dir=... -->
 		<tools.dir>${maven.multiModuleProjectDirectory}/.tools</tools.dir>
@@ -208,7 +212,7 @@
 				<configuration>
 					<toolchains>
 						<jdk>
-							<version>${maven.compiler.release}</version>
+							<version>${toolchain.jdk.version}</version>
 						</jdk>
 					</toolchains>
 				</configuration>

@@ -35,6 +35,8 @@
 	</licenses>
 
 	<properties>
+		<!-- The bundle class needs nothing newer, so that panamage-jxl-jdk21 can use it too. -->
+		<maven.compiler.release>21</maven.compiler.release>
 		<!-- Source of the shared libraries and their location inside the JAR. -->
 		<natives.lib.dir>${jxl.native.linux.aarch64.dir}/lib</natives.lib.dir>
 		<natives.target.dir>${project.build.outputDirectory}/panamage/jxl/natives/linux/aarch64</natives.target.dir>

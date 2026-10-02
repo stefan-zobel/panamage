@@ -35,6 +35,8 @@
 	</licenses>
 
 	<properties>
+		<!-- The bundle class needs nothing newer, so that panamage-jxl-jdk21 can use it too. -->
+		<maven.compiler.release>21</maven.compiler.release>
 		<!-- Source of the libjxl runtime DLLs and their location inside the JAR. -->
 		<natives.bin.dir>${jxl.native.windows.dir}/bin</natives.bin.dir>
 		<natives.target.dir>${project.build.outputDirectory}/panamage/jxl/natives/windows/x86_64</natives.target.dir>
