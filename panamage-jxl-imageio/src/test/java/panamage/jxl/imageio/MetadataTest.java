@@ -16,12 +16,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
+import javax.imageio.metadata.IIOInvalidTreeException;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataFormat;
 import javax.imageio.metadata.IIOMetadataFormatImpl;
@@ -31,6 +33,7 @@ import javax.imageio.stream.ImageOutputStream;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Node;
 
+import panamage.jxl.JxlBox;
 import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlImageInfo;
 import panamage.jxl.JxlMetadata;
@@ -158,6 +161,88 @@ class MetadataTest {
         assertArrayEquals(new byte[] {'<', 'x', '/', '>'}, metadata.getXmp());
         metadata.reset();
         assertTrue(metadata.toJxlMetadata().isEmpty());
+    }
+
+    @Test
+    void boxesSurviveReadingAndWriting() throws IOException {
+        List<JxlBox> boxes = List.of(JxlBox.of("myCo", "{\"unit\": \"micron\"}".getBytes(StandardCharsets.UTF_8)),
+                new JxlBox("jumb", new byte[] {1, 2, 3}, false));
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jxl").next();
+        JxlImageMetadata metadata = (JxlImageMetadata) writer.getDefaultImageMetadata(null, null);
+        writer.dispose();
+        metadata.setBoxes(boxes);
+        BufferedImage image = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);
+
+        byte[] first = write(new IIOImage(image, null, metadata), lossless());
+        assertSameBoxes(boxes, JxlDecoder.readMetadata(first).boxes());
+
+        JxlImageMetadata read = (JxlImageMetadata) readAll(first, "jxl").getMetadata();
+        assertSameBoxes(boxes, read.getBoxes());
+        assertThrows(IllegalStateException.class, () -> read.setBoxes(List.of()));
+        IIOMetadataNode tree = (IIOMetadataNode) read.getAsTree(NATIVE);
+        IIOMetadataNode box = (IIOMetadataNode) tree.getElementsByTagName("Box").item(1);
+        assertEquals("jumb", box.getAttribute("type"));
+        assertEquals("false", box.getAttribute("compressed"));
+        assertArrayEquals(new byte[] {1, 2, 3}, (byte[]) box.getUserObject());
+
+        // Reading and writing again keeps the boxes.
+        byte[] second = write(readAll(first, "jxl"), lossless());
+        assertSameBoxes(boxes, JxlDecoder.readMetadata(second).boxes());
+    }
+
+    @Test
+    void mergesBoxesFromTheNativeTree() throws Exception {
+        JxlImageMetadata metadata = new JxlImageMetadata();
+        metadata.setBoxes(List.of(JxlBox.of("old ", new byte[] {9})));
+        IIOMetadataNode root = new IIOMetadataNode(NATIVE);
+        IIOMetadataNode boxes = new IIOMetadataNode("Boxes");
+        IIOMetadataNode compressed = new IIOMetadataNode("Box");
+        compressed.setAttribute("type", "myCo");
+        compressed.setUserObject(new byte[] {1});
+        IIOMetadataNode plain = new IIOMetadataNode("Box");
+        plain.setAttribute("type", "abcd");
+        plain.setAttribute("compressed", "false");
+        plain.setUserObject(new byte[] {2});
+        boxes.appendChild(compressed);
+        boxes.appendChild(plain);
+        root.appendChild(boxes);
+
+        metadata.mergeTree(NATIVE, root);
+
+        assertSameBoxes(List.of(JxlBox.of("myCo", new byte[] {1}), new JxlBox("abcd", new byte[] {2}, false)),
+                metadata.getBoxes());
+        assertEquals(2, metadata.toJxlMetadata().boxes().size());
+        metadata.reset();
+        assertEquals(List.of(), metadata.getBoxes());
+    }
+
+    @Test
+    void invalidBoxesInTheNativeTreeAreRejected() {
+        for (String[] attributes : new String[][] {{"jxlc", "true"}, {"abc", "true"}, {"abcd", "yes"}, {null, null}}) {
+            JxlImageMetadata metadata = new JxlImageMetadata();
+            IIOMetadataNode root = new IIOMetadataNode(NATIVE);
+            IIOMetadataNode boxes = new IIOMetadataNode("Boxes");
+            IIOMetadataNode box = new IIOMetadataNode("Box");
+            if (attributes[0] != null) {
+                box.setAttribute("type", attributes[0]);
+                box.setAttribute("compressed", attributes[1]);
+            }
+            box.setUserObject(new byte[] {1});
+            boxes.appendChild(box);
+            root.appendChild(boxes);
+            assertThrows(IIOInvalidTreeException.class, () -> metadata.mergeTree(NATIVE, root),
+                    String.valueOf(attributes[0]));
+            assertEquals(List.of(), metadata.getBoxes());
+        }
+    }
+
+    private static void assertSameBoxes(List<JxlBox> expected, List<JxlBox> actual) {
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(expected.get(i).type(), actual.get(i).type(), "box " + i);
+            assertEquals(expected.get(i).compressed(), actual.get(i).compressed(), "box " + i);
+            assertArrayEquals(expected.get(i).content(), actual.get(i).content(), "box " + i);
+        }
     }
 
     private static IIOImage readAll(byte[] data, String format) throws IOException {

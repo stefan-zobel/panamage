@@ -20,6 +20,12 @@ import javax.imageio.metadata.IIOMetadataFormatImpl;
  * sequence, {@code durationTicks}, the tick rate, {@code loops} and
  * {@code name} can be set, each on its own; {@code frameIndex} and
  * {@code durationMillis} are derived and ignored.
+ * <p>
+ * Application-specific boxes are {@code Box} children of a {@code Boxes}
+ * element, in the order of the file, each with the attributes {@code type}
+ * (4 characters) and {@code compressed} ({@code true} or {@code false}) and a
+ * {@code byte[]} as user object. When writing, a {@code Boxes} element
+ * replaces all boxes.
  */
 public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
 
@@ -30,6 +36,8 @@ public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
     static final String XMP = "XMP";
     static final String ICC_PROFILE = "ICCProfile";
     static final String ANIMATION = "Animation";
+    static final String BOXES = "Boxes";
+    static final String BOX = "Box";
 
     static final String FRAME_INDEX = "frameIndex";
     static final String DURATION_MILLIS = "durationMillis";
@@ -38,6 +46,8 @@ public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
     static final String TICKS_PER_SECOND_DENOMINATOR = "ticksPerSecondDenominator";
     static final String LOOPS = "loops";
     static final String FRAME_NAME = "name";
+    static final String BOX_TYPE = "type";
+    static final String BOX_COMPRESSED = "compressed";
 
     private static final JxlImageMetadataFormat INSTANCE = new JxlImageMetadataFormat();
 
@@ -55,6 +65,11 @@ public final class JxlImageMetadataFormat extends IIOMetadataFormatImpl {
             addAttribute(ANIMATION, attribute, DATATYPE_INTEGER, false, null);
         }
         addAttribute(ANIMATION, FRAME_NAME, DATATYPE_STRING, false, "");
+        addElement(BOXES, NAME, 0, Integer.MAX_VALUE);
+        addElement(BOX, BOXES, CHILD_POLICY_EMPTY);
+        addAttribute(BOX, BOX_TYPE, DATATYPE_STRING, true, null);
+        addBooleanAttribute(BOX, BOX_COMPRESSED, true, true);
+        addObjectValue(BOX, byte.class, 0, Integer.MAX_VALUE);
     }
 
     /**

@@ -61,6 +61,7 @@ public final class JxlDecoder {
 
     private static final String EXIF_BOX = "Exif";
     private static final String XMP_BOX = "xml ";
+    private static final String BROTLI_BOX = "brob";
 
     private JxlDecoder() {
     }
@@ -158,8 +159,9 @@ public final class JxlDecoder {
     }
 
     /**
-     * Reads the EXIF and XMP metadata of a JPEG XL image without decoding the
-     * pixels. Compressed metadata boxes are decompressed.
+     * Reads the EXIF and XMP metadata and the application-specific boxes of a
+     * JPEG XL image without decoding the pixels. Compressed metadata boxes
+     * are decompressed. Of several EXIF or XMP boxes, the first is returned.
      * <p>
      * The EXIF orientation is set to 1 (upright) in the returned copy,
      * because the decoder applies the image orientation to the pixels.
@@ -206,17 +208,25 @@ public final class JxlDecoder {
             MemorySegment type = arena.allocate(4);
             MemorySegment chunk = arena.allocate(chunkSize);
             String currentType = null;
+            boolean currentCompressed = false;
             ByteArrayOutputStream box = null;
             byte[] exif = null;
             byte[] xmp = null;
+            List<JxlBox> boxes = new ArrayList<>();
+            long boxBytes = 0;
             while (true) {
                 int status = Jxl.JxlDecoderProcessInput(handle);
                 if (status == Jxl.JXL_DEC_BOX()) {
                     NativeDecoder.check(Jxl.JxlDecoderGetBoxType(handle, type, Jxl.JXL_TRUE()),
                             "JxlDecoderGetBoxType");
                     String name = new String(type.toArray(JAVA_BYTE), StandardCharsets.US_ASCII);
-                    boolean wanted = (EXIF_BOX.equals(name) && exif == null) || (XMP_BOX.equals(name) && xmp == null);
+                    boolean wanted = (EXIF_BOX.equals(name) && exif == null) || (XMP_BOX.equals(name) && xmp == null)
+                            || (JxlBox.isValidType(name) && !JxlBox.isReserved(name));
                     if (wanted) {
+                        NativeDecoder.check(Jxl.JxlDecoderGetBoxType(handle, type, Jxl.JXL_FALSE()),
+                                "JxlDecoderGetBoxType");
+                        currentCompressed = BROTLI_BOX.equals(new String(type.toArray(JAVA_BYTE),
+                                StandardCharsets.US_ASCII));
                         currentType = name;
                         box = new ByteArrayOutputStream();
                         NativeDecoder.check(Jxl.JxlDecoderSetBoxBuffer(handle, chunk, chunk.byteSize()),
@@ -236,14 +246,20 @@ public final class JxlDecoder {
                         drainBox(handle, chunk, box, currentType, limits);
                         if (EXIF_BOX.equals(currentType)) {
                             exif = exifFromBox(box.toByteArray());
-                        } else {
+                        } else if (XMP_BOX.equals(currentType)) {
                             xmp = box.toByteArray();
+                        } else {
+                            // Many boxes of the limit each could still exhaust the memory.
+                            boxBytes += box.size();
+                            limits.checkMetadataBoxes(boxBytes);
+                            boxes.add(new JxlBox(currentType, box.toByteArray(), currentCompressed));
                         }
                         box = null;
                         currentType = null;
                     }
                     if (status == Jxl.JXL_DEC_SUCCESS()) {
-                        return exif == null && xmp == null ? JxlMetadata.NONE : new JxlMetadata(exif, xmp);
+                        return exif == null && xmp == null && boxes.isEmpty() ? JxlMetadata.NONE
+                                : new JxlMetadata(exif, xmp, boxes);
                     }
                 } else {
                     throw NativeDecoder.failure(status);

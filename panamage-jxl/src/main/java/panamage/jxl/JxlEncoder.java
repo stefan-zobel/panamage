@@ -430,15 +430,23 @@ public final class JxlEncoder {
             addBox(encoder, "Exif", content, arena);
         }
         if (metadata.xmp() != null) {
-            addBox(encoder, "xml ", metadata.xmp(), arena);
+            addBox(encoder, "xml ", metadata.xmp(), true, arena);
+        }
+        for (JxlBox box : metadata.boxes()) {
+            addBox(encoder, box.type(), box.content(), box.compressed(), arena);
         }
     }
 
     private static void addBox(NativeEncoder encoder, String type, byte[] content, Arena arena) {
+        addBox(encoder, type, content, true, arena);
+    }
+
+    private static void addBox(NativeEncoder encoder, String type, byte[] content, boolean compressed, Arena arena) {
         MemorySegment typeSegment = arena.allocateFrom(JAVA_BYTE, type.getBytes(StandardCharsets.US_ASCII));
+        // An empty array gives a segment of size 0, which libjxl accepts as empty content.
         MemorySegment contentSegment = arena.allocateFrom(JAVA_BYTE, content);
         encoder.check(Jxl.JxlEncoderAddBox(encoder.handle(), typeSegment, contentSegment, contentSegment.byteSize(),
-                Jxl.JXL_TRUE()), "JxlEncoderAddBox(" + type.strip() + ")");
+                compressed ? Jxl.JXL_TRUE() : Jxl.JXL_FALSE()), "JxlEncoderAddBox(" + type.strip() + ")");
     }
 
     /**

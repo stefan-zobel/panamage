@@ -1,6 +1,8 @@
 package panamage.jxl.imageio;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.metadata.IIOInvalidTreeException;
 import javax.imageio.metadata.IIOMetadata;
@@ -12,13 +14,14 @@ import org.w3c.dom.Node;
 
 import panamage.jxl.JxlAnimationHeader;
 import panamage.jxl.JxlAnimationInfo;
+import panamage.jxl.JxlBox;
 import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImageInfo;
 import panamage.jxl.JxlMetadata;
 
 /**
- * Image metadata of a JPEG XL image: EXIF, XMP and, for images that are not
- * sRGB, the ICC profile. For a frame of an animation, it also holds the
+ * Image metadata of a JPEG XL image: EXIF, XMP, application-specific boxes
+ * and, for images that are not sRGB, the ICC profile. For a frame of an animation, it also holds the
  * duration and name of the frame, the tick rate and the loop count.
  * <p>
  * Supports the native format {@value JxlImageMetadataFormat#NAME} and, for
@@ -43,6 +46,7 @@ public final class JxlImageMetadata extends IIOMetadata {
     private final int frameIndex;
     private byte[] exif;
     private byte[] xmp;
+    private List<JxlBox> boxes;
     private JxlAnimationHeader animationHeader;
     private long durationTicks = -1;
     private String frameName = "";
@@ -74,6 +78,7 @@ public final class JxlImageMetadata extends IIOMetadata {
         this.frameIndex = frameIndex;
         this.exif = metadata.exif();
         this.xmp = metadata.xmp();
+        this.boxes = metadata.boxes();
     }
 
     /**
@@ -115,6 +120,27 @@ public final class JxlImageMetadata extends IIOMetadata {
     public void setXmp(byte[] xmp) {
         checkWritable();
         this.xmp = xmp == null ? null : xmp.clone();
+    }
+
+    /**
+     * Returns the application-specific boxes.
+     *
+     * @return copies of the boxes, in the order of the file
+     */
+    public List<JxlBox> getBoxes() {
+        return copy(boxes);
+    }
+
+    /**
+     * Sets the application-specific boxes.
+     *
+     * @param boxes the boxes; they are copied
+     * @throws NullPointerException  if the list or a box is {@code null}
+     * @throws IllegalStateException if the metadata is read-only
+     */
+    public void setBoxes(List<JxlBox> boxes) {
+        checkWritable();
+        this.boxes = copy(boxes);
     }
 
     /**
@@ -214,8 +240,8 @@ public final class JxlImageMetadata extends IIOMetadata {
     }
 
     /**
-     * Returns modifiable metadata with the same EXIF, XMP, animation header
-     * and frame information.
+     * Returns modifiable metadata with the same EXIF, XMP, boxes, animation
+     * header and frame information.
      */
     JxlImageMetadata copyForWriting() {
         JxlImageMetadata copy = new JxlImageMetadata(null, toJxlMetadata(), false);
@@ -229,12 +255,14 @@ public final class JxlImageMetadata extends IIOMetadata {
     }
 
     /**
-     * Returns the EXIF and XMP data for {@link panamage.jxl.JxlEncoder}.
+     * Returns the EXIF and XMP data and the boxes for
+     * {@link panamage.jxl.JxlEncoder}.
      *
      * @return the metadata
      */
     public JxlMetadata toJxlMetadata() {
-        return exif == null && xmp == null ? JxlMetadata.NONE : new JxlMetadata(getExif(), getXmp());
+        return exif == null && xmp == null && boxes.isEmpty() ? JxlMetadata.NONE
+                : new JxlMetadata(getExif(), getXmp(), getBoxes());
     }
 
     @Override
@@ -270,6 +298,7 @@ public final class JxlImageMetadata extends IIOMetadata {
                 case JxlImageMetadataFormat.EXIF -> exif = bytes(child);
                 case JxlImageMetadataFormat.XMP -> xmp = bytes(child);
                 case JxlImageMetadataFormat.ANIMATION -> mergeAnimation(child);
+                case JxlImageMetadataFormat.BOXES -> boxes = boxes(child);
                 case JxlImageMetadataFormat.ICC_PROFILE -> {
                     // Derived from the image when reading; not written.
                 }
@@ -283,6 +312,7 @@ public final class JxlImageMetadata extends IIOMetadata {
         checkWritable();
         exif = null;
         xmp = null;
+        boxes = List.of();
         animationHeader = null;
         durationTicks = -1;
         frameName = "";
@@ -384,7 +414,57 @@ public final class JxlImageMetadata extends IIOMetadata {
             node.setAttribute(JxlImageMetadataFormat.FRAME_NAME, frameName());
             root.appendChild(node);
         }
+        if (!boxes.isEmpty()) {
+            IIOMetadataNode node = new IIOMetadataNode(JxlImageMetadataFormat.BOXES);
+            for (JxlBox box : getBoxes()) {
+                IIOMetadataNode child = new IIOMetadataNode(JxlImageMetadataFormat.BOX);
+                child.setAttribute(JxlImageMetadataFormat.BOX_TYPE, box.type());
+                child.setAttribute(JxlImageMetadataFormat.BOX_COMPRESSED, Boolean.toString(box.compressed()));
+                child.setUserObject(box.content());
+                node.appendChild(child);
+            }
+            root.appendChild(node);
+        }
         return root;
+    }
+
+    /**
+     * Reads the {@code Box} children of a {@code Boxes} element; a box without
+     * {@code compressed} attribute is compressed.
+     */
+    private static List<JxlBox> boxes(Node node) throws IIOInvalidTreeException {
+        List<JxlBox> result = new ArrayList<>();
+        for (Node child = node.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (!JxlImageMetadataFormat.BOX.equals(child.getNodeName())) {
+                throw new IIOInvalidTreeException("Unknown element " + child.getNodeName(), child);
+            }
+            NamedNodeMap attributes = child.getAttributes();
+            Node type = attributes.getNamedItem(JxlImageMetadataFormat.BOX_TYPE);
+            Node compressed = attributes.getNamedItem(JxlImageMetadataFormat.BOX_COMPRESSED);
+            if (compressed != null && !compressed.getNodeValue().equals("true")
+                    && !compressed.getNodeValue().equals("false")) {
+                throw new IIOInvalidTreeException(JxlImageMetadataFormat.BOX_COMPRESSED
+                        + " must be true or false: " + compressed.getNodeValue(), child);
+            }
+            byte[] content = bytes(child);
+            if (type == null || content == null) {
+                throw new IIOInvalidTreeException("A box needs a type and a byte[]", child);
+            }
+            try {
+                result.add(new JxlBox(type.getNodeValue(), content,
+                        compressed == null || compressed.getNodeValue().equals("true")));
+            } catch (IllegalArgumentException e) {
+                IIOInvalidTreeException invalid = new IIOInvalidTreeException(e.getMessage(), child);
+                invalid.initCause(e);
+                throw invalid;
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /** Copies the boxes with their contents. */
+    private static List<JxlBox> copy(List<JxlBox> boxes) {
+        return boxes.stream().map(box -> new JxlBox(box.type(), box.content().clone(), box.compressed())).toList();
     }
 
     private static void addBytes(IIOMetadataNode parent, String name, byte[] value) {

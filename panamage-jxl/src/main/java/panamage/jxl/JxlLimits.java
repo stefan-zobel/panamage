@@ -18,9 +18,10 @@ package panamage.jxl;
  * default limit. {@link JxlDecoder#decodeFrames} returns all frames of an
  * animation at once, so there the limit applies to all frames together;
  * {@link JxlFrameDecoder} holds one frame at a time and applies it to each
- * frame. The metadata limit applies to each EXIF or XMP box after
- * decompression. The JPEG limit applies to the JPEG file that
- * {@link JxlTranscoder#toJpeg} reconstructs.
+ * frame. The metadata limit applies to each metadata box after decompression,
+ * and to all application-specific boxes ({@link JxlBox}) together. The JPEG
+ * limit applies to the JPEG file that {@link JxlTranscoder#toJpeg}
+ * reconstructs.
  * <p>
  * The methods without a {@code JxlLimits} parameter use {@link #defaults()},
  * which can be configured with the system properties
@@ -33,8 +34,9 @@ package panamage.jxl;
  *
  * @param maxPixels        the largest number of pixels of the image or of one
  *                         of its layers, counted as described above
- * @param maxMetadataBytes the largest size of an EXIF or XMP box after
- *                         decompression, in bytes
+ * @param maxMetadataBytes the largest size of a metadata box after
+ *                         decompression, and of all application-specific
+ *                         boxes together, in bytes
  * @param maxJpegBytes     the largest size of a reconstructed JPEG file, in
  *                         bytes
  */
@@ -43,7 +45,7 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes
     /** The default pixel limit, 2^28 pixels (256 megapixels, e.g. 16384 x 16384). */
     public static final long DEFAULT_MAX_PIXELS = 1L << 28;
 
-    /** The default metadata limit, 16 MiB per box. */
+    /** The default metadata limit, 16 MiB per box and for all application-specific boxes together. */
     public static final long DEFAULT_MAX_METADATA_BYTES = 16L << 20;
 
     /**
@@ -214,6 +216,17 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes
         if (size > maxMetadataBytes) {
             throw new JxlLimitException("Metadata box '" + boxType + "' exceeds the limit of " + maxMetadataBytes
                     + " bytes");
+        }
+    }
+
+    /**
+     * Throws a {@link JxlLimitException} if the application-specific boxes
+     * read so far exceed the metadata limit together.
+     */
+    void checkMetadataBoxes(long size) {
+        if (size > maxMetadataBytes) {
+            throw new JxlLimitException("The metadata boxes exceed the limit of " + maxMetadataBytes
+                    + " bytes together");
         }
     }
 
