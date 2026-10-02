@@ -47,7 +47,7 @@ def main() -> int:
 
     jdk_linux = wsl_path(args.distro, jdk)
     toolchains = tools / TOOLCHAINS_FILE
-    write_toolchains(jdk_linux, toolchains)
+    write_toolchains({"25": jdk_linux}, toolchains)
 
     command = " ".join([
         "cd", shlex.quote(wsl_path(args.distro, PROJECT_DIR)), "&&",

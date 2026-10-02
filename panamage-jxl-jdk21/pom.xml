@@ -1,0 +1,160 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>net.sourceforge.streamsupport</groupId>
+		<artifactId>panamage</artifactId>
+		<version>0.1.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>panamage-jxl-jdk21</artifactId>
+	<name>panamage-jxl-jdk21</name>
+	<description>panamage-jxl and panamage-jxl-imageio for JDK 21, based on the preview of the Foreign Function and Memory API (runs only on JDK 21, with --enable-preview)</description>
+
+	<!-- The sources are generated from those of panamage-jxl and panamage-jxl-imageio by
+	     scripts/make_jdk21_variant.py, with the libjxl bindings of jextract 21 that are checked
+	     in under bindings/. The module is built with the profile jdk21 (-Pjdk21) and needs a
+	     JDK 21 toolchain and Python 3.10 or newer. -->
+
+	<properties>
+		<!-- Preview features need the compiler of exactly this release. -->
+		<maven.compiler.release>21</maven.compiler.release>
+		<toolchain.jdk.version>21</toolchain.jdk.version>
+		<!-- The Python that runs the generator; set with -Dpython.executable=... if it is not on the PATH. -->
+		<python.executable>python</python.executable>
+		<jdk21.sources.dir>${project.build.directory}/jdk21-sources</jdk21.sources.dir>
+		<!-- Set with -Dpanamage.jxl.library.path=<dir> to test loading from a directory. -->
+		<panamage.jxl.library.path></panamage.jxl.library.path>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-spi</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-aarch64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-musl-x86_64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-linux-musl-aarch64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>panamage-jxl-natives-macos-aarch64</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<sourceDirectory>${jdk21.sources.dir}/main/java</sourceDirectory>
+		<testSourceDirectory>${jdk21.sources.dir}/test/java</testSourceDirectory>
+		<resources>
+			<resource>
+				<directory>${jdk21.sources.dir}/main/resources</directory>
+			</resource>
+		</resources>
+		<testResources>
+			<testResource>
+				<directory>${jdk21.sources.dir}/test/resources</directory>
+			</testResource>
+		</testResources>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>generate-jdk21-sources</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+						<configuration>
+							<executable>${python.executable}</executable>
+							<arguments>
+								<argument>${maven.multiModuleProjectDirectory}/scripts/make_jdk21_variant.py</argument>
+								<argument>--generate</argument>
+								<argument>${jdk21.sources.dir}</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<compilerArgs>
+						<arg>--enable-preview</arg>
+						<arg>-Xlint:-preview</arg>
+					</compilerArgs>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<configuration>
+					<!-- The same API as the packages that the modules of panamage-jxl and
+					     panamage-jxl-imageio export. -->
+					<excludePackageNames>panamage.jxl.ffi:panamage.jxl.internal</excludePackageNames>
+					<additionalOptions combine.self="override">
+						<additionalOption>--enable-preview</additionalOption>
+					</additionalOptions>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Fail fast instead of blocking the build if a native call loops. -->
+					<forkedProcessTimeoutInSeconds>300</forkedProcessTimeoutInSeconds>
+					<useModulePath>false</useModulePath>
+					<argLine>--enable-preview --enable-native-access=ALL-UNNAMED</argLine>
+					<systemPropertyVariables>
+						<!-- Keep extracted libraries out of the global temp directory. -->
+						<panamage.jxl.cache.dir>${project.build.directory}/native-cache</panamage.jxl.cache.dir>
+						<panamage.jxl.library.path>${panamage.jxl.library.path}</panamage.jxl.library.path>
+						<panamage.jxl.conformance.dir>${conformance.dir}</panamage.jxl.conformance.dir>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>
