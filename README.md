@@ -137,7 +137,7 @@ param.setCompressionQuality(0.9f);
 param.setEffort(7);
 try (ImageOutputStream out = ImageIO.createImageOutputStream(new File("photo.jxl"))) {
     writer.setOutput(out);
-    writer.write(null, photo, param);                     // keeps EXIF and XMP
+    writer.write(null, photo, param);                   // keeps EXIF and XMP
 }
 ```
 
@@ -155,7 +155,7 @@ and name. `ImageIO.read` returns the first frame.
 ```java
 byte[] jpeg = Files.readAllBytes(Path.of("photo.jpg"));
 byte[] jxl = JxlTranscoder.fromJpeg(jpeg);              // smaller, lossless
-byte[] restored = JxlTranscoder.toJpeg(jxl);             // identical to jpeg
+byte[] restored = JxlTranscoder.toJpeg(jxl);            // identical to jpeg
 ```
 
 ### Decoder and encoder
@@ -189,7 +189,7 @@ List<JxlFrame> frames = JxlDecoder.decodeFrames(data, 4, JxlSampleType.UINT8);
 
 try (JxlFrameDecoder decoder = JxlFrameDecoder.open(data, 4, JxlSampleType.UINT8)) {
     for (JxlFrame frame = decoder.next(); frame != null; frame = decoder.next()) {
-        show(frame.image(), frame.info().durationMillis());      // one frame in memory at a time
+        show(frame.image(), frame.info().durationMillis());       // one frame in memory at a time
     }
 }
 ```
