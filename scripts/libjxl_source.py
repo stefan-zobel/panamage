@@ -138,10 +138,12 @@ def check_loading(lib: Path, libc: str) -> None:
 
 
 def copy_licenses(source: Path, build_dir: Path, licenses: Path) -> None:
-    """Copies the licenses of libjxl and its bundled dependencies."""
+    """Copies the licenses of libjxl and its bundled dependencies, with LF line
+    endings on every platform (git on Windows may check them out with CRLF)."""
     roots = {"source": source, "build": build_dir}
     for name, (root, relative) in LICENSES.items():
-        shutil.copyfile(roots[root] / relative, licenses / name)
+        text = (roots[root] / relative).read_bytes().replace(b"\r\n", b"\n")
+        (licenses / name).write_bytes(text)
 
 
 def pack(staging: Path, output: Path, archive_root: str, libraries: list[str]) -> Path:
