@@ -1,7 +1,8 @@
 """Checkout, build and packing of libjxl from source, shared by the scripts
-that build the native libraries for platforms without libjxl binaries
-(build_libjxl_macos.py, build_libjxl_linux_aarch64.py,
-build_libjxl_linux_musl.py), plus the ELF helpers of the Linux scripts.
+that build the native libraries for platforms without suitable libjxl
+binaries (build_libjxl_macos.py, build_libjxl_linux_aarch64.py,
+build_libjxl_linux_musl.py, build_libjxl_windows.py), plus the ELF helpers of
+the Linux scripts.
 
 The pinned release is built with only the runtime libraries: libjxl,
 libjxl_cms (with skcms) and libjxl_threads, plus the Brotli libraries they
@@ -13,6 +14,7 @@ import io
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -67,10 +69,18 @@ def output_of(cmd: list[str]) -> str:
     return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
 
 
+def remove_tree(path: Path) -> None:
+    """Deletes a directory tree, also read-only files such as the pack files of git on Windows."""
+    def make_writable(function, name, _):
+        os.chmod(name, stat.S_IWRITE)
+        function(name)
+    shutil.rmtree(path, onexc=make_writable)
+
+
 def checkout(source: Path) -> None:
     """Clones the pinned tag with its submodules and checks the commit."""
     if source.exists():
-        shutil.rmtree(source)
+        remove_tree(source)
     run(["git", "clone", "--depth", "1", "--branch", LIBJXL_TAG, LIBJXL_REPOSITORY, str(source)])
     head = output_of(["git", "-C", str(source), "rev-parse", "HEAD"]).strip()
     if head != LIBJXL_COMMIT:
@@ -87,7 +97,7 @@ def build(source: Path, build_dir: Path, install_dir: Path, platform_options: li
     """Configures, builds and installs libjxl with the common and the platform options."""
     for directory in (build_dir, install_dir):
         if directory.exists():
-            shutil.rmtree(directory)
+            remove_tree(directory)
     run(["cmake", "-S", str(source), "-B", str(build_dir), f"-DCMAKE_INSTALL_PREFIX={install_dir}",
          *COMMON_CMAKE_OPTIONS, *platform_options])
     run(["cmake", "--build", str(build_dir), "--config", "Release", "--parallel", str(os.cpu_count() or 4)])

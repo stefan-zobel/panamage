@@ -1,0 +1,30 @@
+# Builds the libjxl DLLs for Windows x64 from source with the static C and C++
+# runtime. The DLLs of the libjxl release use the C++ runtime of the process and
+# need msvcp140.dll 14.40 or newer, newer than the copy some JDKs ship; the
+# DLLs built here need nothing but KERNEL32.dll. The archive is a workflow
+# artifact; its content is checked in under natives/ (see natives/README.md).
+name: libjxl for Windows x86_64
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build and check libjxl
+        run: python scripts/build_libjxl_windows.py --output dist/natives
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libjxl-windows-x86_64
+          path: dist/natives/
