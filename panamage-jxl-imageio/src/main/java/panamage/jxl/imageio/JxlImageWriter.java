@@ -1,5 +1,6 @@
 package panamage.jxl.imageio;
 
+import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
@@ -54,6 +55,27 @@ import panamage.jxl.JxlMetadata;
  * from a JPEG XL animation carries these values, so {@code readAll} of every
  * frame followed by {@code writeToSequence} keeps the timing.
  * <p>
+ * GIF animations read with the JDK's GIF reader can be converted the same
+ * way: {@code readAll} of every frame followed by {@code writeToSequence}
+ * keeps the delay of every frame and the loop count (100 ticks per second;
+ * delays of 0 or 1 hundredths of a second become 100 milliseconds, as in
+ * browsers; without a loop count, the animation is played once). Frames that
+ * cover only part of the animation are composed as browsers show them, with
+ * their position and disposal method; pass the reader's stream metadata to
+ * {@link #prepareWriteSequence} for the size of the animation, otherwise the
+ * first frame sets it. Composed frames have an alpha channel.
+ * {@snippet :
+ * ImageReader gif = ImageIO.getImageReadersByFormatName("gif").next();
+ * gif.setInput(ImageIO.createImageInputStream(gifFile));
+ * ImageWriter jxl = ImageIO.getImageWritersByFormatName("jxl").next();
+ * jxl.setOutput(ImageIO.createImageOutputStream(jxlFile));
+ * jxl.prepareWriteSequence(gif.getStreamMetadata());
+ * for (int i = 0; i < gif.getNumImages(true); i++) {
+ *     jxl.writeToSequence(gif.readAll(i, null), null);
+ * }
+ * jxl.endWriteSequence();
+ * }
+ * <p>
  * The encoded data is written to the output stream as it is produced; a
  * frame of a sequence is written when the next frame is added or the
  * sequence is ended. If encoding fails, the stream may contain part of the
@@ -71,6 +93,10 @@ public final class JxlImageWriter extends ImageWriter {
     private JxlFrameEncoder sequence;
     private JxlAnimationHeader sequenceHeader;
     private int sequenceIndex;
+    /** The size of a GIF animation from its stream metadata, or {@code null}. */
+    private Dimension gifScreen;
+    /** Composes the frames of a GIF animation; created by its first frame. */
+    private GifCanvas gifCanvas;
 
     /**
      * Creates a writer; usually called through {@link JxlImageWriterSpi}.
@@ -115,8 +141,10 @@ public final class JxlImageWriter extends ImageWriter {
 
     /**
      * Converts {@link JxlImageMetadata}, metadata in the native format
-     * {@value JxlImageMetadataFormat#NAME} and the metadata of the JDK's JPEG
-     * reader (EXIF and XMP from APP1 segments) to modifiable
+     * {@value JxlImageMetadataFormat#NAME}, the metadata of the JDK's JPEG
+     * reader (EXIF and XMP from APP1 segments) and the metadata of the JDK's
+     * GIF reader (the delay as frame information and the loop count in an
+     * animation header with 100 ticks per second) to modifiable
      * {@link JxlImageMetadata}; returns {@code null} for other metadata.
      */
     @Override
@@ -130,6 +158,9 @@ public final class JxlImageWriter extends ImageWriter {
         }
         if (JpegMetadata.isSupported(inData)) {
             return new JxlImageMetadata(null, JpegMetadata.extract(inData), false);
+        }
+        if (GifMetadata.isSupported(inData)) {
+            return GifMetadata.read(inData).toJxlMetadata();
         }
         if (JxlImageMetadataFormat.NAME.equals(inData.getNativeMetadataFormatName())) {
             JxlImageMetadata converted = new JxlImageMetadata();
@@ -181,8 +212,9 @@ public final class JxlImageWriter extends ImageWriter {
     }
 
     /**
-     * Starts an animation. Stream metadata is not supported and ignored with
-     * a warning.
+     * Starts an animation. Stream metadata of the JDK's GIF reader provides
+     * the size of a GIF animation; other stream metadata is ignored with a
+     * warning.
      *
      * @throws IllegalStateException if no output is set or a sequence is
      *                               already being written
@@ -193,7 +225,10 @@ public final class JxlImageWriter extends ImageWriter {
         if (sequenceStarted) {
             throw new IllegalStateException("A sequence is already being written");
         }
-        if (streamMetadata != null) {
+        gifScreen = null;
+        if (streamMetadata != null && GifMetadata.isSupportedStream(streamMetadata)) {
+            gifScreen = GifMetadata.screenSize(streamMetadata);
+        } else if (streamMetadata != null) {
             processWarningOccurred(0, "Stream metadata is not written");
         }
         sequenceStarted = true;
@@ -220,7 +255,7 @@ public final class JxlImageWriter extends ImageWriter {
         if (!sequenceStarted) {
             throw new IllegalStateException("prepareWriteSequence was not called");
         }
-        Frame frame = prepare(image, param, sequenceIndex);
+        Frame frame = prepare(composeGif(image), param, sequenceIndex);
         if (frame == null) {
             return;
         }
@@ -297,6 +332,23 @@ public final class JxlImageWriter extends ImageWriter {
         super.dispose();
     }
 
+    /**
+     * Draws a frame of a GIF animation, read with the JDK's GIF reader, at its
+     * position on the canvas of the animation; returns other images
+     * unchanged.
+     */
+    private IIOImage composeGif(IIOImage image) {
+        if (image == null || image.hasRaster() || image.getMetadata() == null
+                || !GifMetadata.isSupported(image.getMetadata())) {
+            return image;
+        }
+        GifMetadata.Frame gif = GifMetadata.read(image.getMetadata());
+        if (gifCanvas == null) {
+            gifCanvas = GifCanvas.create(gifScreen, image.getRenderedImage(), gif);
+        }
+        return new IIOImage(gifCanvas.draw(image.getRenderedImage(), gif), null, image.getMetadata());
+    }
+
     /** The default frame duration of 100 milliseconds in ticks of the header, at least 1. */
     static long defaultTicks(JxlAnimationHeader header) {
         double ticks = DEFAULT_FRAME_MILLIS / 1000.0 * header.ticksPerSecondNumerator()
@@ -357,6 +409,8 @@ public final class JxlImageWriter extends ImageWriter {
         sequenceOutput = null;
         sequenceStarted = false;
         sequenceIndex = 0;
+        gifScreen = null;
+        gifCanvas = null;
     }
 
     /** The converted pixels and metadata of an image. */
