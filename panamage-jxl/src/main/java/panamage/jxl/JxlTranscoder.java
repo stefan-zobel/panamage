@@ -282,36 +282,36 @@ public final class JxlTranscoder {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = NativeInput.of(jxl, arena);
             JxlDecoder.checkFrames(input, limits, 1, false, arena);
-            return reconstruct(input, chunkSize, limits, sink, arena);
+            return reconstruct(input, chunkSize, limits, sink);
         }
     }
 
-    private static long reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink,
-            Arena arena) throws IOException {
-        try (NativeDecoder decoder = NativeDecoder.create()) {
+    private static long reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink)
+            throws IOException {
+        // The buffer is released after the decoder, which may still refer to it.
+        try (NativeBuffer chunk = new NativeBuffer(chunkSize); NativeDecoder decoder = NativeDecoder.create()) {
             MemorySegment handle = decoder.handle();
             decoder.start(Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(), input);
 
-            MemorySegment chunk = arena.allocate(chunkSize);
             boolean reconstructing = false;
             while (true) {
                 int status = Jxl.JxlDecoderProcessInput(handle);
                 if (status == Jxl.JXL_DEC_JPEG_RECONSTRUCTION()) {
                     reconstructing = true;
-                    NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk, chunk.byteSize()),
-                            "JxlDecoderSetJPEGBuffer");
+                    NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk.segment(),
+                            chunk.segment().byteSize()), "JxlDecoderSetJPEGBuffer");
                 } else if (status == Jxl.JXL_DEC_JPEG_NEED_MORE_OUTPUT()) {
-                    if (drainChunk(handle, chunk, sink, limits) == 0) {
+                    if (drainChunk(handle, chunk.segment(), sink, limits) == 0) {
                         // libjxl writes some JPEG segments only as a whole, so a buffer
                         // that is too small never fills; grow it until it does.
-                        limits.checkJpeg(sink.written() + chunk.byteSize() + 1L);
-                        chunk = arena.allocate(Math.multiplyExact(chunk.byteSize(), 2L));
+                        limits.checkJpeg(sink.written() + chunk.segment().byteSize() + 1L);
+                        chunk.grow();
                     }
-                    NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk, chunk.byteSize()),
-                            "JxlDecoderSetJPEGBuffer");
+                    NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk.segment(),
+                            chunk.segment().byteSize()), "JxlDecoderSetJPEGBuffer");
                 } else if (reconstructing
                         && (status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS())) {
-                    drainChunk(handle, chunk, sink, limits);
+                    drainChunk(handle, chunk.segment(), sink, limits);
                     return sink.written();
                 } else if (status == Jxl.JXL_DEC_NEED_IMAGE_OUT_BUFFER()
                         || status == Jxl.JXL_DEC_FULL_IMAGE() || status == Jxl.JXL_DEC_SUCCESS()) {

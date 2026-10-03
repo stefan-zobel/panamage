@@ -319,14 +319,15 @@ public final class JxlDecoder {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
-        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
+        // The buffer is released after the decoder, which may still refer to it.
+        try (Arena arena = Arena.ofConfined(); NativeBuffer chunk = new NativeBuffer(chunkSize);
+                NativeDecoder decoder = NativeDecoder.createWithoutThreads()) {
             MemorySegment handle = decoder.handle();
             NativeDecoder.check(Jxl.JxlDecoderSetDecompressBoxes(handle, Jxl.JXL_TRUE()),
                     "JxlDecoderSetDecompressBoxes");
             decoder.start(Jxl.JXL_DEC_BOX() | Jxl.JXL_DEC_BOX_COMPLETE(), NativeInput.of(data, arena));
 
             MemorySegment type = arena.allocate(4);
-            MemorySegment chunk = arena.allocate(chunkSize);
             String currentType = null;
             boolean currentCompressed = false;
             ByteArrayOutputStream box = null;
@@ -349,21 +350,21 @@ public final class JxlDecoder {
                                 StandardCharsets.US_ASCII));
                         currentType = name;
                         box = new ByteArrayOutputStream();
-                        NativeDecoder.check(Jxl.JxlDecoderSetBoxBuffer(handle, chunk, chunk.byteSize()),
-                                "JxlDecoderSetBoxBuffer");
+                        NativeDecoder.check(Jxl.JxlDecoderSetBoxBuffer(handle, chunk.segment(),
+                                chunk.segment().byteSize()), "JxlDecoderSetBoxBuffer");
                     }
                 } else if (status == Jxl.JXL_DEC_BOX_NEED_MORE_OUTPUT()) {
-                    if (drainBox(handle, chunk, box, currentType, limits) == 0) {
+                    if (drainBox(handle, chunk.segment(), box, currentType, limits) == 0) {
                         // Grow the buffer if the decoder could not write anything into it;
                         // the box then holds more than the buffer can take.
-                        limits.checkMetadata(currentType, box.size() + chunk.byteSize() + 1L);
-                        chunk = arena.allocate(Math.multiplyExact(chunk.byteSize(), 2L));
+                        limits.checkMetadata(currentType, box.size() + chunk.segment().byteSize() + 1L);
+                        chunk.grow();
                     }
-                    NativeDecoder.check(Jxl.JxlDecoderSetBoxBuffer(handle, chunk, chunk.byteSize()),
-                            "JxlDecoderSetBoxBuffer");
+                    NativeDecoder.check(Jxl.JxlDecoderSetBoxBuffer(handle, chunk.segment(),
+                            chunk.segment().byteSize()), "JxlDecoderSetBoxBuffer");
                 } else if (status == Jxl.JXL_DEC_BOX_COMPLETE() || status == Jxl.JXL_DEC_SUCCESS()) {
                     if (box != null) {
-                        drainBox(handle, chunk, box, currentType, limits);
+                        drainBox(handle, chunk.segment(), box, currentType, limits);
                         if (EXIF_BOX.equals(currentType)) {
                             exif = exifFromBox(box.toByteArray());
                         } else if (XMP_BOX.equals(currentType)) {
