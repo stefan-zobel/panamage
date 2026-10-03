@@ -10,7 +10,7 @@ change in later versions.
 
 Requirements
 ------------
-* JDK 25 or newer
+* JDK 22 or newer
 * $requirements
 
 

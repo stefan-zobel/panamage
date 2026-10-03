@@ -48,9 +48,9 @@ bundled; nothing needs to be installed.
   The number of threads can be set per call.
 - **Image I/O plugin** with reader, writer, write parameters (lossy/lossless,
   quality, effort) and image metadata. 16-bit and floating point images are
-  read and written with full precision. On a JVM that cannot run panamage,
-  Image I/O keeps working for all other formats; only the JPEG XL plugin is
-  missing.
+  read and written with full precision. On a JVM that cannot run panamage
+  (Java 8 to 21), Image I/O keeps working for all other formats; only the
+  JPEG XL plugin is missing.
 - **Protection against decompression bombs:** images beyond 256 megapixels and
   metadata beyond 16 MiB are rejected before their memory is allocated; the
   limits are configurable.
@@ -65,7 +65,7 @@ bundled; nothing needs to be installed.
 
 ## Requirements
 
-- JDK 25 or newer, or JDK 21 with `panamage-jxl-jdk21` (see [JDK 21](#jdk-21))
+- JDK 22 or newer, or JDK 21 with `panamage-jxl-jdk21` (see [JDK 21](#jdk-21))
 - Windows 10 or newer on x86_64, Linux on x86_64 with glibc 2.29 or newer
   (for example Ubuntu 20.04, Debian 11, RHEL 9 or newer), Linux on aarch64
   with glibc 2.28 or newer (for example Ubuntu 20.04, Debian 10, RHEL 8,
@@ -413,6 +413,7 @@ do the same. Headers and metadata are always read on the calling thread.
 
 0.3.0 changes some of the API and behavior of 0.2:
 
+- panamage runs on JDK 22 or newer; 0.2 needed JDK 25.
 - `JxlLimits`, `JxlDecodeOptions`, `JxlEncodeOptions` and the information
   types (`JxlImageInfo`, `JxlFrameInfo`, `JxlAnimationInfo`,
   `JxlExtraChannelInfo`) are classes instead of records, so that they can
@@ -436,7 +437,7 @@ On JDK 21, the Foreign Function and Memory API is a preview feature with a
 slightly different API. `panamage-jxl-jdk21` contains `panamage-jxl` and
 `panamage-jxl-imageio` built for it, with the same API, and is used instead of
 them. `panamage-jxl-spi` (a dependency) and the native artifacts are the same
-as for JDK 25:
+as for JDK 22 and newer:
 
 ```xml
 <dependency>
@@ -462,10 +463,11 @@ as for JDK 25:
   ```
 
 - It has no module descriptor and is meant for the class path.
-- Without `--enable-preview`, or on Java 8 to 24 with `panamage-jxl-imageio`,
-  Image I/O keeps working for all other formats; the JPEG XL reader and
-  writer are missing, and the logger `panamage.jxl.imageio.JxlFormat` reports
-  why at level `FINE`.
+- Without `--enable-preview`, Image I/O keeps working for all other formats;
+  the JPEG XL reader and writer are missing, and the logger
+  `panamage.jxl.imageio.JxlFormat` reports why at level `FINE`. The same
+  holds for `panamage-jxl-imageio` on Java 8 to 21, whose classes need Java
+  22.
 - It is not part of the release archives; the JAR is attached to the GitHub
   release.
 
@@ -504,7 +506,8 @@ the DLLs for Windows contain the C and C++ runtime and need nothing else.
 Prerequisites:
 
 - JDK 25, registered in `~/.m2/toolchains.xml` (the build uses the Maven
-  toolchains plugin, so Maven itself may run on another JDK):
+  toolchains plugin, so Maven itself may run on another JDK). It compiles the
+  modules for Java 22, the oldest version they run on:
 
   ```xml
   <toolchains>
@@ -610,7 +613,8 @@ Five GitHub Actions workflows, all started manually (Actions, Run workflow):
   and including `panamage-jxl-jdk21` on JDK 21, and on Alpine Linux on x86_64
   and aarch64 in a container; the platforms can be chosen when starting it.
   The hosted jobs also check the Image I/O plugin on JDK 21 without
-  `--enable-preview`, and the Linux x86_64 job on JDK 8.
+  `--enable-preview`, and the Linux x86_64 job on JDK 8; then they run the
+  tests of `panamage-jxl` and `panamage-jxl-imageio` once more on JDK 22.
   The test reports are kept as workflow artifacts.
 - **libjxl for macOS arm64** builds the libjxl libraries for macOS from source
   and checks them; its artifact is what `natives/` contains.

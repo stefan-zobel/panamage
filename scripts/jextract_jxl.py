@@ -38,6 +38,11 @@ SYMBOL_LOOKUP_PATTERN = re.compile(r"static final SymbolLookup SYMBOL_LOOKUP = [
 SYMBOL_LOOKUP_REPLACEMENT = (
     "static final SymbolLookup SYMBOL_LOOKUP = panamage.jxl.internal.NativeLibraries.lookup();")
 
+# SymbolLookup.findOrThrow exists since Java 23; the bindings are compiled for
+# Java 22, so they use find(...).orElseThrow(), which throws the same exception.
+FIND_OR_THROW_PATTERN = re.compile(r"SYMBOL_LOOKUP\.findOrThrow\((\"\w+\")\)")
+FIND_OR_THROW_REPLACEMENT = r"SYMBOL_LOOKUP.find(\1).orElseThrow()"
+
 # jextract types the C "long" and "long double" layouts for the platform it runs
 # on (32-bit long on Windows, 64-bit on Linux), which makes the shared class fail
 # to initialize elsewhere. libjxl's API does not use these types, so the unused
@@ -137,6 +142,9 @@ def patch_symbol_lookup(package_dir: Path) -> None:
     text, count = SYMBOL_LOOKUP_PATTERN.subn(SYMBOL_LOOKUP_REPLACEMENT, text)
     if count != 1:
         raise SystemExit(f"Expected exactly one SYMBOL_LOOKUP initializer in {header}, found {count}")
+    text, count = FIND_OR_THROW_PATTERN.subn(FIND_OR_THROW_REPLACEMENT, text)
+    if count == 0 or "findOrThrow" in text:
+        raise SystemExit(f"Could not replace every findOrThrow in {header} ({count} replaced)")
     header.write_text(text, encoding="utf-8", newline="\n")
 
 

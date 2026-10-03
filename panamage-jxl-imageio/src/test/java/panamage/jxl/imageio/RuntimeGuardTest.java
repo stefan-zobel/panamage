@@ -30,7 +30,7 @@ class RuntimeGuardTest {
 
     /**
      * Home directory of a JDK 21, which cannot load the classes of
-     * panamage-jxl (release 25).
+     * panamage-jxl (release 22).
      */
     static final String JDK21_HOME = "jdk21.home";
 

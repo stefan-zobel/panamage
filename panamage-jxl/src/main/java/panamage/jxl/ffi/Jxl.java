@@ -652,7 +652,7 @@ public class Jxl extends Jxl$shared {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             Jxl.C_INT    );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderVersion");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderVersion").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -749,7 +749,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlSignatureCheck");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlSignatureCheck").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -809,7 +809,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderCreate");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderCreate").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -868,7 +868,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderReset");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderReset").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -927,7 +927,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderDestroy");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderDestroy").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1193,7 +1193,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderRewind");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderRewind").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1253,7 +1253,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSkipFrames");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSkipFrames").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1313,7 +1313,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSkipCurrentFrame");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSkipCurrentFrame").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1375,7 +1375,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetParallelRunner");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetParallelRunner").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1435,7 +1435,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSizeHintBasicInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSizeHintBasicInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1496,7 +1496,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSubscribeEvents");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSubscribeEvents").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1557,7 +1557,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetKeepOrientation");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetKeepOrientation").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1618,7 +1618,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetUnpremultiplyAlpha");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetUnpremultiplyAlpha").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1679,7 +1679,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetRenderSpotcolors");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetRenderSpotcolors").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1740,7 +1740,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetCoalescing");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetCoalescing").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1800,7 +1800,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderProcessInput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderProcessInput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1862,7 +1862,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetInput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetInput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1922,7 +1922,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderReleaseInput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderReleaseInput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1981,7 +1981,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderCloseInput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderCloseInput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2042,7 +2042,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetBasicInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetBasicInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2104,7 +2104,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetExtraChannelInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetExtraChannelInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2167,7 +2167,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetExtraChannelName");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetExtraChannelName").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2247,7 +2247,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetColorAsEncodedProfile");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetColorAsEncodedProfile").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2309,7 +2309,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetICCProfileSize");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetICCProfileSize").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2372,7 +2372,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetColorAsICCProfile");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetColorAsICCProfile").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2433,7 +2433,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetPreferredColorProfile");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetPreferredColorProfile").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2494,7 +2494,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_FLOAT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetDesiredIntensityTarget");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetDesiredIntensityTarget").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2557,7 +2557,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetOutputColorProfile");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetOutputColorProfile").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2618,7 +2618,7 @@ public class Jxl extends Jxl$shared {
             JxlCmsInterface.layout()
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetCms");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetCms").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2680,7 +2680,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderPreviewOutBufferSize");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderPreviewOutBufferSize").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2743,7 +2743,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetPreviewOutBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetPreviewOutBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2804,7 +2804,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetFrameHeader");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetFrameHeader").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2866,7 +2866,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetFrameName");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetFrameName").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2928,7 +2928,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetExtraChannelBlendInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetExtraChannelBlendInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -2990,7 +2990,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderImageOutBufferSize");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderImageOutBufferSize").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3053,7 +3053,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetImageOutBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetImageOutBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3116,7 +3116,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetImageOutCallback");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetImageOutCallback").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3181,7 +3181,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetMultithreadedImageOutCallback");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetMultithreadedImageOutCallback").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3244,7 +3244,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderExtraChannelBufferSize");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderExtraChannelBufferSize").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3308,7 +3308,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetExtraChannelBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetExtraChannelBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3370,7 +3370,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetJPEGBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetJPEGBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3430,7 +3430,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderReleaseJPEGBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderReleaseJPEGBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3492,7 +3492,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetBoxBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetBoxBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3552,7 +3552,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderReleaseBoxBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderReleaseBoxBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3613,7 +3613,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetDecompressBoxes");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetDecompressBoxes").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3675,7 +3675,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetBoxType");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetBoxType").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3736,7 +3736,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetBoxSizeRaw");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetBoxSizeRaw").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3797,7 +3797,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetBoxSizeContents");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetBoxSizeContents").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3858,7 +3858,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetProgressiveDetail");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetProgressiveDetail").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3918,7 +3918,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderGetIntendedDownsamplingRatio");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderGetIntendedDownsamplingRatio").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -3978,7 +3978,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderFlushImage");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderFlushImage").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -4039,7 +4039,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlDecoderSetImageOutBitDepth");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlDecoderSetImageOutBitDepth").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -4097,7 +4097,7 @@ public class Jxl extends Jxl$shared {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             Jxl.C_POINTER    );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderStatsCreate");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderStatsCreate").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -4156,7 +4156,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderStatsDestroy");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderStatsDestroy").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -4460,7 +4460,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderStatsGet");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderStatsGet").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -4520,7 +4520,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderStatsMerge");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderStatsMerge").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -4578,7 +4578,7 @@ public class Jxl extends Jxl$shared {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             Jxl.C_INT    );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderVersion");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderVersion").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5106,7 +5106,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderCreate");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderCreate").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5165,7 +5165,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderReset");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderReset").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5224,7 +5224,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderDestroy");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderDestroy").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5284,7 +5284,7 @@ public class Jxl extends Jxl$shared {
             JxlCmsInterface.layout()
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetCms");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetCms").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5346,7 +5346,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetParallelRunner");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetParallelRunner").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5406,7 +5406,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderGetError");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderGetError").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5468,7 +5468,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderProcessOutput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderProcessOutput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5529,7 +5529,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetFrameHeader");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetFrameHeader").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5591,7 +5591,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetExtraChannelBlendInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetExtraChannelBlendInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5652,7 +5652,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetFrameName");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetFrameName").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5713,7 +5713,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetFrameBitDepth");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetFrameBitDepth").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5775,7 +5775,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderAddJPEGFrame");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderAddJPEGFrame").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5838,7 +5838,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderAddImageFrame");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderAddImageFrame").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5899,7 +5899,7 @@ public class Jxl extends Jxl$shared {
             JxlEncoderOutputProcessor.layout()
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetOutputProcessor");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetOutputProcessor").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -5959,7 +5959,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderFlushInput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderFlushInput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6021,7 +6021,7 @@ public class Jxl extends Jxl$shared {
             JxlChunkedFrameInputSource.layout()
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderAddChunkedFrame");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderAddChunkedFrame").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6085,7 +6085,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetExtraChannelBuffer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetExtraChannelBuffer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6149,7 +6149,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderAddBox");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderAddBox").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6209,7 +6209,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderUseBoxes");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderUseBoxes").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6268,7 +6268,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderCloseBoxes");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderCloseBoxes").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6327,7 +6327,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderCloseFrames");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderCloseFrames").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6386,7 +6386,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderCloseInput");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderCloseInput").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6447,7 +6447,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetColorEncoding");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetColorEncoding").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6509,7 +6509,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetICCProfile");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetICCProfile").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6568,7 +6568,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderInitBasicInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderInitBasicInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6627,7 +6627,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderInitFrameHeader");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderInitFrameHeader").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6686,7 +6686,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderInitBlendInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderInitBlendInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6747,7 +6747,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetBasicInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetBasicInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6809,7 +6809,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetUpsamplingMode");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetUpsamplingMode").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6869,7 +6869,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderInitExtraChannelInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderInitExtraChannelInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6931,7 +6931,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetExtraChannelInfo");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetExtraChannelInfo").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -6994,7 +6994,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetExtraChannelName");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetExtraChannelName").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7056,7 +7056,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderFrameSettingsSetOption");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderFrameSettingsSetOption").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7118,7 +7118,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_FLOAT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderFrameSettingsSetFloatOption");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderFrameSettingsSetFloatOption").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7179,7 +7179,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderUseContainer");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderUseContainer").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7240,7 +7240,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderStoreJPEGMetadata");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderStoreJPEGMetadata").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7301,7 +7301,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetCodestreamLevel");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetCodestreamLevel").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7361,7 +7361,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderGetRequiredCodestreamLevel");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderGetRequiredCodestreamLevel").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7422,7 +7422,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetFrameLossless");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetFrameLossless").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7483,7 +7483,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_FLOAT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetFrameDistance");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetFrameDistance").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7545,7 +7545,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_FLOAT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetExtraChannelDistance");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetExtraChannelDistance").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7605,7 +7605,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_FLOAT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderDistanceFromQuality");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderDistanceFromQuality").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7666,7 +7666,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderFrameSettingsCreate");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderFrameSettingsCreate").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7726,7 +7726,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlColorEncodingSetToSRGB");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlColorEncodingSetToSRGB").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7786,7 +7786,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlColorEncodingSetToLinearSRGB");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlColorEncodingSetToLinearSRGB").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7845,7 +7845,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderAllowExpertOptions");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderAllowExpertOptions").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7906,7 +7906,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderSetDebugImageCallback");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderSetDebugImageCallback").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -7966,7 +7966,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlEncoderCollectStats");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlEncoderCollectStats").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8031,7 +8031,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunner");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlResizableParallelRunner").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8091,7 +8091,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerCreate");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlResizableParallelRunnerCreate").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8151,7 +8151,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerSetThreads");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlResizableParallelRunnerSetThreads").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8212,7 +8212,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerSuggestThreads");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlResizableParallelRunnerSuggestThreads").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8271,7 +8271,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerDestroy");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlResizableParallelRunnerDestroy").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8336,7 +8336,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_INT
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlThreadParallelRunner");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlThreadParallelRunner").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8397,7 +8397,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_LONG_LONG
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlThreadParallelRunnerCreate");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlThreadParallelRunnerCreate").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8456,7 +8456,7 @@ public class Jxl extends Jxl$shared {
             Jxl.C_POINTER
         );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlThreadParallelRunnerDestroy");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlThreadParallelRunnerDestroy").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -8514,7 +8514,7 @@ public class Jxl extends Jxl$shared {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             Jxl.C_LONG_LONG    );
 
-        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlThreadParallelRunnerDefaultNumWorkerThreads");
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.find("JxlThreadParallelRunnerDefaultNumWorkerThreads").orElseThrow();
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
