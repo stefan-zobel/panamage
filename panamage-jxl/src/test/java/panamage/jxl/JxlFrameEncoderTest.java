@@ -108,8 +108,7 @@ class JxlFrameEncoderTest {
         byte[] original = TestImages.animationJxl();
         JxlAnimationInfo info = JxlDecoder.readAnimationInfo(original);
         List<JxlFrame> frames = JxlDecoder.decodeFrames(original, 4, JxlSampleType.UINT8);
-        JxlAnimationHeader header = new JxlAnimationHeader(info.ticksPerSecondNumerator(),
-                info.ticksPerSecondDenominator(), info.loops());
+        JxlAnimationHeader header = info.header();
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (JxlFrameEncoder encoder = JxlFrameEncoder.open(out, header, JxlEncodeOptions.ofLossless(),
@@ -377,8 +376,7 @@ class JxlFrameEncoderTest {
         byte[] data = encode(List.of(rgba(1), rgba(2)), header, JxlEncodeOptions.ofLossless(), JxlMetadata.NONE, 1, 1);
 
         JxlAnimationInfo animation = JxlDecoder.readAnimationInfo(data);
-        assertEquals(header, new JxlAnimationHeader(animation.ticksPerSecondNumerator(),
-                animation.ticksPerSecondDenominator(), animation.loops()));
+        assertEquals(header, animation.header());
     }
 
     @Test
@@ -469,8 +467,7 @@ class JxlFrameEncoderTest {
     void encodeAnimationRestoresDecodedFrames() throws IOException {
         byte[] original = TestImages.animationJxl();
         JxlAnimationInfo info = JxlDecoder.readAnimationInfo(original);
-        JxlAnimationHeader header = new JxlAnimationHeader(info.ticksPerSecondNumerator(),
-                info.ticksPerSecondDenominator(), info.loops());
+        JxlAnimationHeader header = info.header();
 
         byte[] data = JxlEncoder.encodeAnimation(JxlDecoder.decodeFrames(original, 4, JxlSampleType.UINT8), header,
                 JxlEncodeOptions.ofLossless(), JxlMetadata.NONE);

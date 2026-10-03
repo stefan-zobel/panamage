@@ -11,6 +11,14 @@ import java.util.Objects;
  * {@code ticksPerSecondDenominator / ticksPerSecondNumerator} seconds. A still
  * image has one frame with a duration of 0 and a tick rate of 0 / 0. Further
  * information may be added in later versions.
+ * <p>
+ * {@link #header()} gives the header for writing the frames again:
+ * {@snippet :
+ * JxlAnimationInfo info = JxlDecoder.readAnimationInfo(data);
+ * List<JxlFrame> frames = JxlDecoder.decodeFrames(data, 4, JxlSampleType.UINT8);
+ * byte[] copy = JxlEncoder.encodeAnimation(frames, info.header(), JxlEncodeOptions.ofLossless(),
+ *         JxlMetadata.NONE);
+ * }
  */
 public final class JxlAnimationInfo {
 
@@ -76,6 +84,18 @@ public final class JxlAnimationInfo {
      */
     public int frameCount() {
         return frames.size();
+    }
+
+    /**
+     * Returns the tick rate and the loop count as a header for writing the
+     * frames again, with {@link JxlFrameEncoder} or
+     * {@link JxlEncoder#encodeAnimation}.
+     *
+     * @return the header, or {@code null} for a still image
+     */
+    public JxlAnimationHeader header() {
+        return ticksPerSecondNumerator == 0 ? null
+                : new JxlAnimationHeader(ticksPerSecondNumerator, ticksPerSecondDenominator, loops);
     }
 
     @Override

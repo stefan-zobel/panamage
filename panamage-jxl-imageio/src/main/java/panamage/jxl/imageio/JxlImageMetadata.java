@@ -214,11 +214,7 @@ public final class JxlImageMetadata extends IIOMetadata {
      *         none was set
      */
     public JxlAnimationHeader getAnimationHeader() {
-        if (animation != null) {
-            return new JxlAnimationHeader(animation.ticksPerSecondNumerator(),
-                    animation.ticksPerSecondDenominator(), animation.loops());
-        }
-        return animationHeader;
+        return animation != null ? animation.header() : animationHeader;
     }
 
     /**

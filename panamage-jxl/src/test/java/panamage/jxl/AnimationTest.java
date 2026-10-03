@@ -56,6 +56,7 @@ class AnimationTest {
 
         assertEquals(new JxlAnimationInfo(10, 1, 3, List.of(new JxlFrameInfo(2, 200, "first"),
                 new JxlFrameInfo(5, 500, ""), new JxlFrameInfo(1, 100, "third"))), animation);
+        assertEquals(new panamage.jxl.JxlAnimationHeader(10, 1, 3), animation.header());
         List<JxlFrame> frames = JxlDecoder.decodeFrames(data, 3, JxlSampleType.UINT8);
         assertEquals(animation.frames(), frames.stream().map(JxlFrame::info).toList());
     }
@@ -66,6 +67,7 @@ class AnimationTest {
 
         assertEquals(new JxlAnimationInfo(0, 0, 0, List.of(new JxlFrameInfo(0, 0, ""))),
                 JxlDecoder.readAnimationInfo(data));
+        assertNull(JxlDecoder.readAnimationInfo(data).header());
         List<JxlFrame> frames = JxlDecoder.decodeFrames(data, 4, JxlSampleType.UINT8);
         assertEquals(1, frames.size());
         assertArrayEquals(TestImages.gradientRgbaPixels(), ((JxlImage.Uint8) frames.get(0).image()).pixels());

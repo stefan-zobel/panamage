@@ -14,7 +14,7 @@ package panamage.jxl;
  * @param loops                     how often the animation is played, or 0 to
  *                                  play it forever; at most 4294967295
  *                                  (2<sup>32</sup> - 1)
- * @see JxlAnimationInfo
+ * @see JxlAnimationInfo#header()
  */
 public record JxlAnimationHeader(long ticksPerSecondNumerator, long ticksPerSecondDenominator, long loops) {
 
