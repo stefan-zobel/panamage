@@ -4,7 +4,6 @@ import java.awt.color.ColorSpace;
 import java.awt.color.ICC_ColorSpace;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,7 +20,6 @@ import javax.imageio.stream.ImageInputStream;
 
 import panamage.jxl.JxlAnimationInfo;
 import panamage.jxl.JxlDecodeOptions;
-import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlException;
 import panamage.jxl.JxlFrame;
 import panamage.jxl.JxlFrameDecoder;
@@ -84,14 +82,16 @@ import panamage.jxl.JxlSampleType;
  * ImageReader reader = ImageIO.getImageReadersByFormatName("jxl").next();
  * ((JxlImageReader) reader).setLimits(JxlLimits.defaults().withMaxPixels(50_000_000));
  * }
+ * <p>
+ * The encoded input is read once and kept in native memory until the next
+ * input, {@link #reset()} or {@link #dispose()}.
  */
 public final class JxlImageReader extends ImageReader {
 
-    private static final int READ_CHUNK_SIZE = 64 * 1024;
-
     private JxlLimits limits = JxlLimits.defaults();
     private boolean convertToSrgb = true;
-    private byte[] data;
+    /** The encoded input in native memory, read once per input. */
+    private EncodedInput input;
     private JxlImageInfo info;
     /** The color space of the image if it is not sRGB, once read; see {@link #originalSpace()}. */
     private ColorSpace originalSpace;
@@ -286,7 +286,7 @@ public final class JxlImageReader extends ImageReader {
         JxlImageInfo imageInfo = info();
         if (boxes == null) {
             try {
-                boxes = JxlDecoder.readMetadata(data(), limits);
+                boxes = input().readMetadata(limits);
             } catch (JxlException e) {
                 throw new IIOException("Cannot read JPEG XL metadata: " + e.getMessage(), e);
             }
@@ -311,7 +311,7 @@ public final class JxlImageReader extends ImageReader {
         JxlImage decoded;
         try {
             decoded = imageInfo.animated() ? readFrame(imageIndex, imageInfo.channels(), target)
-                    : JxlDecoder.decode(data(), imageInfo.channels(), target.type(),
+                    : input().decode(imageInfo.channels(), target.type(),
                             new JxlDecodeOptions(limits, target.srgb()));
         } catch (JxlException e) {
             closeFrames();
@@ -341,7 +341,7 @@ public final class JxlImageReader extends ImageReader {
         if (frames == null || framesType != target.type() || framesSrgb != target.srgb()
                 || !framesLimits.equals(limits) || frames.nextIndex() > index) {
             closeFrames();
-            frames = JxlFrameDecoder.open(data(), channels, target.type(), new JxlDecodeOptions(limits, target.srgb()));
+            frames = input().openFrames(channels, target.type(), new JxlDecodeOptions(limits, target.srgb()));
             framesType = target.type();
             framesSrgb = target.srgb();
             framesLimits = limits;
@@ -363,14 +363,19 @@ public final class JxlImageReader extends ImageReader {
         clear();
     }
 
+    /** Releases the native copy of the input. */
     @Override
     public void dispose() {
         clear();
     }
 
     private void clear() {
+        // The frame decoder holds a copy of its own.
         closeFrames();
-        data = null;
+        if (input != null) {
+            input.close();
+            input = null;
+        }
         info = null;
         originalSpace = null;
         originalSpaceRead = false;
@@ -426,7 +431,7 @@ public final class JxlImageReader extends ImageReader {
     private JxlImageInfo info() throws IOException {
         if (info == null) {
             try {
-                info = JxlDecoder.readInfo(data());
+                info = input().readInfo();
             } catch (JxlException e) {
                 throw new IIOException("Cannot read JPEG XL header: " + e.getMessage(), e);
             }
@@ -437,7 +442,7 @@ public final class JxlImageReader extends ImageReader {
     private JxlAnimationInfo animation() throws IOException {
         if (animation == null) {
             try {
-                animation = JxlDecoder.readAnimationInfo(data());
+                animation = input().readAnimationInfo();
             } catch (JxlException e) {
                 throw new IIOException("Cannot read JPEG XL frames: " + e.getMessage(), e);
             }
@@ -446,17 +451,10 @@ public final class JxlImageReader extends ImageReader {
     }
 
     /** Reads the input from its current position to the end, once. */
-    private byte[] data() throws IOException {
-        if (data == null) {
-            ImageInputStream stream = requireInput();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buffer = new byte[READ_CHUNK_SIZE];
-            int read;
-            while ((read = stream.read(buffer)) > 0) {
-                out.write(buffer, 0, read);
-            }
-            data = out.toByteArray();
+    EncodedInput input() throws IOException {
+        if (input == null) {
+            input = EncodedInput.read(requireInput());
         }
-        return data;
+        return input;
     }
 }

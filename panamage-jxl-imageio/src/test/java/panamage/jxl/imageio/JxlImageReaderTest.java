@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,8 +16,11 @@ import java.awt.image.DataBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.imageio.IIOException;
 import javax.imageio.IIOImage;
@@ -299,6 +303,60 @@ class JxlImageReaderTest {
         JxlImageReader copy = reader(out.toByteArray());
         assertEquals(1, copy.getNumImages(true));
         assertArrayEquals(Resources.animationArgb(1), argb(copy.read(0)));
+    }
+
+    @Test
+    void copiesTheInputToNativeMemoryOnce() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("photo-420-exif.jxl"));
+        assertEquals(256, reader.getWidth(0));
+        MemorySegment input = reader.input().segment();
+
+        reader.getImageMetadata(0);
+        reader.read(0);
+
+        assertSame(input, reader.input().segment());
+        assertTrue(input.isNative());
+        assertEquals(Resources.bytes("photo-420-exif.jxl").length, input.byteSize());
+        reader.dispose();
+    }
+
+    @Test
+    void releasesTheInputForNewInputResetAndDispose() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("gradient.jxl"));
+        reader.getWidth(0);
+        MemorySegment first = reader.input().segment();
+
+        reader.setInput(stream(Resources.bytes("animation.jxl")));
+        assertFalse(first.scope().isAlive());
+        assertEquals(3, reader.getNumImages(true));
+        MemorySegment second = reader.input().segment();
+
+        reader.reset();
+        assertFalse(second.scope().isAlive());
+
+        reader.setInput(stream(Resources.bytes("gradient.jxl")));
+        reader.read(0);
+        MemorySegment third = reader.input().segment();
+        reader.dispose();
+        assertFalse(third.scope().isAlive());
+    }
+
+    @Test
+    void canBeUsedByAnotherThread() throws Exception {
+        JxlImageReader reader = reader(Resources.bytes("animation.jxl"));
+        assertEquals(Resources.ANIMATION_WIDTH, reader.getWidth(0));
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            BufferedImage image = executor.submit(() -> {
+                BufferedImage frame = reader.read(1);
+                reader.dispose();
+                return frame;
+            }).get();
+            assertArrayEquals(Resources.animationArgb(1), argb(image));
+        } finally {
+            executor.shutdown();
+        }
     }
 
     @Test
