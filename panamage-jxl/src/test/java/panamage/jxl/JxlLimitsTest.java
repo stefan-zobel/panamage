@@ -13,18 +13,10 @@ class JxlLimitsTest {
 
     @Test
     void rejectsLimitsThatAreNotPositive() {
-        assertThrows(IllegalArgumentException.class, () -> new JxlLimits(0, 1));
-        assertThrows(IllegalArgumentException.class, () -> new JxlLimits(1, 0));
-        assertThrows(IllegalArgumentException.class, () -> new JxlLimits(-1, 1));
-        assertThrows(IllegalArgumentException.class, () -> new JxlLimits(1, 1, 0));
+        assertThrows(IllegalArgumentException.class, () -> JxlLimits.unlimited().withMaxPixels(-1));
         assertThrows(IllegalArgumentException.class, () -> JxlLimits.defaults().withMaxPixels(0));
         assertThrows(IllegalArgumentException.class, () -> JxlLimits.defaults().withMaxMetadataBytes(-5));
         assertThrows(IllegalArgumentException.class, () -> JxlLimits.defaults().withMaxJpegBytes(-1));
-    }
-
-    @Test
-    void theTwoLimitConstructorUsesTheDefaultJpegLimit() {
-        assertEquals(new JxlLimits(10, 20, JxlLimits.DEFAULT_MAX_JPEG_BYTES), new JxlLimits(10, 20));
     }
 
     @Test
@@ -42,7 +34,7 @@ class JxlLimitsTest {
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void defaultsCanBeSetWithSystemProperties() {
         withProperties("1000", " 2048 ", "4096", () -> {
-            assertEquals(new JxlLimits(1000, 2048, 4096), JxlLimits.defaults());
+            assertEquals(limits(1000, 2048, 4096), JxlLimits.defaults());
         });
     }
 
@@ -65,11 +57,19 @@ class JxlLimitsTest {
 
     @Test
     void copiesReplaceOneLimit() {
-        JxlLimits limits = new JxlLimits(10, 20, 30);
-        assertEquals(new JxlLimits(40, 20, 30), limits.withMaxPixels(40));
-        assertEquals(new JxlLimits(10, 40, 30), limits.withMaxMetadataBytes(40));
-        assertEquals(new JxlLimits(10, 20, 40), limits.withMaxJpegBytes(40));
-        assertEquals(new JxlLimits(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE), JxlLimits.unlimited());
+        JxlLimits limits = limits(10, 20, 30);
+        assertEquals(10, limits.maxPixels());
+        assertEquals(20, limits.maxMetadataBytes());
+        assertEquals(30, limits.maxJpegBytes());
+        assertEquals(limits(40, 20, 30), limits.withMaxPixels(40));
+        assertEquals(limits(10, 40, 30), limits.withMaxMetadataBytes(40));
+        assertEquals(limits(10, 20, 40), limits.withMaxJpegBytes(40));
+        assertEquals(limits(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE), JxlLimits.unlimited());
+    }
+
+    private static JxlLimits limits(long maxPixels, long maxMetadataBytes, long maxJpegBytes) {
+        return JxlLimits.unlimited().withMaxPixels(maxPixels).withMaxMetadataBytes(maxMetadataBytes)
+                .withMaxJpegBytes(maxJpegBytes);
     }
 
     @Test

@@ -86,8 +86,7 @@ class SequenceWriterTest {
         byte[] data = writeSequence(frames, lossless());
 
         JxlFrameInfo hundred = new JxlFrameInfo(100, 100.0, "");
-        assertEquals(new JxlAnimationInfo(1000, 1, 0, List.of(hundred, hundred, hundred)),
-                JxlDecoder.readAnimationInfo(data));
+        assertAnimation(1000, 1, 0, List.of(hundred, hundred, hundred), JxlDecoder.readAnimationInfo(data));
         assertEquals(0x800000FF, argbOfFrame(data, 2));
     }
 
@@ -111,8 +110,8 @@ class SequenceWriterTest {
         byte[] data = writeSequence(List.of(frame(0xFFFF0000, first), frame(0xFF00FF00, second),
                 frame(0xFF0000FF, null)), lossless());
 
-        assertEquals(new JxlAnimationInfo(10, 1, 2, List.of(new JxlFrameInfo(3, 300, "first"),
-                new JxlFrameInfo(7, 700, "second"), new JxlFrameInfo(1, 100, ""))), JxlDecoder.readAnimationInfo(data));
+        assertAnimation(10, 1, 2, List.of(new JxlFrameInfo(3, 300, "first"), new JxlFrameInfo(7, 700, "second"),
+                new JxlFrameInfo(1, 100, "")), JxlDecoder.readAnimationInfo(data));
         assertArrayEquals(first.getXmp(), JxlDecoder.readMetadata(data).xmp());
     }
 
@@ -334,6 +333,14 @@ class SequenceWriterTest {
             writer.dispose();
         }
         return out.toByteArray();
+    }
+
+    private static void assertAnimation(long ticksPerSecondNumerator, long ticksPerSecondDenominator, long loops,
+            List<JxlFrameInfo> frames, JxlAnimationInfo animation) {
+        assertEquals(ticksPerSecondNumerator, animation.ticksPerSecondNumerator());
+        assertEquals(ticksPerSecondDenominator, animation.ticksPerSecondDenominator());
+        assertEquals(loops, animation.loops());
+        assertEquals(frames, animation.frames());
     }
 
     /** A frame filled with one ARGB color. */

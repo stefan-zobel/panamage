@@ -20,19 +20,24 @@ import java.util.Objects;
  * mapped, and gray images stay gray, with the sRGB transfer curve. If libjxl
  * cannot convert an image, its pixels keep their color space and
  * {@link JxlImage#iccProfile()} describes it.
- *
- * @param limits the limits that protect against decompression bombs
- * @param srgb   whether the pixels are converted to sRGB
+ * <p>
+ * Options are immutable. Start from {@link #defaults()} and change single
+ * settings with the {@code with} methods; further settings may be added in
+ * later versions.
  */
-public record JxlDecodeOptions(JxlLimits limits, boolean srgb) {
+public final class JxlDecodeOptions {
+
+    private final JxlLimits limits;
+    private final boolean srgb;
 
     /**
-     * Validates the settings.
+     * Creates options.
      *
      * @throws NullPointerException if {@code limits} is {@code null}
      */
-    public JxlDecodeOptions {
-        Objects.requireNonNull(limits, "limits");
+    JxlDecodeOptions(JxlLimits limits, boolean srgb) {
+        this.limits = Objects.requireNonNull(limits, "limits");
+        this.srgb = srgb;
     }
 
     /**
@@ -43,6 +48,24 @@ public record JxlDecodeOptions(JxlLimits limits, boolean srgb) {
      */
     public static JxlDecodeOptions defaults() {
         return new JxlDecodeOptions(JxlLimits.defaults(), false);
+    }
+
+    /**
+     * Returns the limits that protect against decompression bombs.
+     *
+     * @return the limits
+     */
+    public JxlLimits limits() {
+        return limits;
+    }
+
+    /**
+     * Returns whether the pixels are converted to sRGB.
+     *
+     * @return {@code true} if the pixels are converted to sRGB
+     */
+    public boolean srgb() {
+        return srgb;
     }
 
     /**
@@ -65,5 +88,20 @@ public record JxlDecodeOptions(JxlLimits limits, boolean srgb) {
      */
     public JxlDecodeOptions withSrgb(boolean srgb) {
         return new JxlDecodeOptions(limits, srgb);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof JxlDecodeOptions other && limits.equals(other.limits) && srgb == other.srgb;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(limits, srgb);
+    }
+
+    @Override
+    public String toString() {
+        return "JxlDecodeOptions[limits=" + limits + ", srgb=" + srgb + "]";
     }
 }

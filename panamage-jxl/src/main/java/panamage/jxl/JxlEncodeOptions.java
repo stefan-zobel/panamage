@@ -9,15 +9,10 @@ import panamage.jxl.ffi.Jxl;
  * {@snippet :
  * JxlEncodeOptions options = JxlEncodeOptions.ofQuality(90).withEffort(9);
  * }
- *
- * @param lossless whether the image is encoded bit-exact
- * @param distance the target Butteraugli distance for lossy encoding
- *                 ({@code 0 < distance <= 25}, 1.0 is visually lossless);
- *                 must be 0 for lossless encoding
- * @param effort   the encoder effort from 1 (fastest) to 10 (slowest, best
- *                 compression); does not affect decoding speed
+ * <p>
+ * Options are immutable; further settings may be added in later versions.
  */
-public record JxlEncodeOptions(boolean lossless, float distance, int effort) {
+public final class JxlEncodeOptions {
 
     /** The default effort of libjxl ("squirrel"). */
     public static final int DEFAULT_EFFORT = 7;
@@ -31,24 +26,26 @@ public record JxlEncodeOptions(boolean lossless, float distance, int effort) {
     /** The largest distance accepted by libjxl. */
     public static final float MAX_DISTANCE = 25.0f;
 
+    /** The Butteraugli distance, 0 for lossless encoding. */
+    private final float distance;
+    private final int effort;
+
     /**
-     * Validates the settings.
+     * Creates options.
      *
      * @throws IllegalArgumentException if the effort or distance is out of range
      */
-    public JxlEncodeOptions {
+    private JxlEncodeOptions(float distance, int effort) {
         if (effort < MIN_EFFORT || effort > MAX_EFFORT) {
             throw new IllegalArgumentException(
                     "effort must be in [" + MIN_EFFORT + ", " + MAX_EFFORT + "]: " + effort);
         }
-        if (lossless) {
-            if (distance != 0.0f) {
-                throw new IllegalArgumentException("distance must be 0 for lossless encoding: " + distance);
-            }
-        } else if (!(distance > 0.0f && distance <= MAX_DISTANCE)) {
+        if (distance != 0.0f && !(distance > 0.0f && distance <= MAX_DISTANCE)) {
             throw new IllegalArgumentException(
                     "distance must be in (0, " + MAX_DISTANCE + "] for lossy encoding: " + distance);
         }
+        this.distance = distance;
+        this.effort = effort;
     }
 
     /**
@@ -66,7 +63,7 @@ public record JxlEncodeOptions(boolean lossless, float distance, int effort) {
      * @return options for lossless encoding
      */
     public static JxlEncodeOptions ofLossless() {
-        return new JxlEncodeOptions(true, 0.0f, DEFAULT_EFFORT);
+        return new JxlEncodeOptions(0.0f, DEFAULT_EFFORT);
     }
 
     /**
@@ -78,7 +75,11 @@ public record JxlEncodeOptions(boolean lossless, float distance, int effort) {
      * @throws IllegalArgumentException if the distance is out of range
      */
     public static JxlEncodeOptions ofDistance(float distance) {
-        return new JxlEncodeOptions(false, distance, DEFAULT_EFFORT);
+        if (distance == 0.0f) {
+            throw new IllegalArgumentException(
+                    "distance must be in (0, " + MAX_DISTANCE + "] for lossy encoding: " + distance);
+        }
+        return new JxlEncodeOptions(distance, DEFAULT_EFFORT);
     }
 
     /**
@@ -100,6 +101,35 @@ public record JxlEncodeOptions(boolean lossless, float distance, int effort) {
     }
 
     /**
+     * Returns whether the image is encoded bit-exact.
+     *
+     * @return {@code true} for lossless encoding
+     */
+    public boolean lossless() {
+        return distance == 0.0f;
+    }
+
+    /**
+     * Returns the target Butteraugli distance for lossy encoding.
+     *
+     * @return the distance ({@code 0 < distance <= 25}, 1.0 is visually
+     *         lossless), or 0 for lossless encoding
+     */
+    public float distance() {
+        return distance;
+    }
+
+    /**
+     * Returns the encoder effort.
+     *
+     * @return the effort from 1 (fastest) to 10 (slowest, best compression);
+     *         it does not affect decoding speed
+     */
+    public int effort() {
+        return effort;
+    }
+
+    /**
      * Returns a copy of these options with a different effort.
      *
      * @param effort the effort from 1 (fastest) to 10 (slowest)
@@ -107,6 +137,22 @@ public record JxlEncodeOptions(boolean lossless, float distance, int effort) {
      * @throws IllegalArgumentException if the effort is out of range
      */
     public JxlEncodeOptions withEffort(int effort) {
-        return new JxlEncodeOptions(lossless, distance, effort);
+        return new JxlEncodeOptions(distance, effort);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof JxlEncodeOptions other && Float.compare(distance, other.distance) == 0
+                && effort == other.effort;
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * Float.hashCode(distance) + effort;
+    }
+
+    @Override
+    public String toString() {
+        return "JxlEncodeOptions[lossless=" + lossless() + ", distance=" + distance + ", effort=" + effort + "]";
     }
 }

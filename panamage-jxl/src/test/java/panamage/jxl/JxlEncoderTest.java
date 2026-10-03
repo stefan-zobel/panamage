@@ -157,7 +157,6 @@ class JxlEncoderTest {
         assertThrows(IllegalArgumentException.class, () -> JxlEncodeOptions.ofDistance(Float.NaN));
         assertThrows(IllegalArgumentException.class, () -> JxlEncodeOptions.ofQuality(101));
         assertThrows(IllegalArgumentException.class, () -> JxlEncodeOptions.ofQuality(-1));
-        assertThrows(IllegalArgumentException.class, () -> new JxlEncodeOptions(true, 1.0f, 7));
     }
 
     @Test

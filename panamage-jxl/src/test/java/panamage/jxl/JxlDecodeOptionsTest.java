@@ -41,7 +41,6 @@ class JxlDecodeOptionsTest {
 
     @Test
     void limitsAreRequired() {
-        assertThrows(NullPointerException.class, () -> new JxlDecodeOptions(null, false));
         assertThrows(NullPointerException.class, () -> JxlDecodeOptions.defaults().withLimits(null));
         assertThrows(NullPointerException.class,
                 () -> JxlDecoder.decode(TestImages.gradientJxl(), 4, JxlSampleType.UINT8, (JxlDecodeOptions) null));

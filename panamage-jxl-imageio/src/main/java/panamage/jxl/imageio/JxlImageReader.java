@@ -311,8 +311,7 @@ public final class JxlImageReader extends ImageReader {
         JxlImage decoded;
         try {
             decoded = imageInfo.animated() ? readFrame(imageIndex, imageInfo.channels(), target)
-                    : input().decode(imageInfo.channels(), target.type(),
-                            new JxlDecodeOptions(limits, target.srgb()));
+                    : input().decode(imageInfo.channels(), target.type(), decodeOptions(target));
         } catch (JxlException e) {
             closeFrames();
             throw new IIOException("Cannot decode JPEG XL image: " + e.getMessage(), e);
@@ -341,7 +340,7 @@ public final class JxlImageReader extends ImageReader {
         if (frames == null || framesType != target.type() || framesSrgb != target.srgb()
                 || !framesLimits.equals(limits) || frames.nextIndex() > index) {
             closeFrames();
-            frames = input().openFrames(channels, target.type(), new JxlDecodeOptions(limits, target.srgb()));
+            frames = input().openFrames(channels, target.type(), decodeOptions(target));
             framesType = target.type();
             framesSrgb = target.srgb();
             framesLimits = limits;
@@ -352,6 +351,10 @@ public final class JxlImageReader extends ImageReader {
             throw new IIOException("The JPEG XL animation has no frame " + index);
         }
         return frame.image();
+    }
+
+    private JxlDecodeOptions decodeOptions(Target target) {
+        return JxlDecodeOptions.defaults().withLimits(limits).withSrgb(target.srgb());
     }
 
     /** Also restores the default limits and the conversion to sRGB. */

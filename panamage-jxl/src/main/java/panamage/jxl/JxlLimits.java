@@ -1,5 +1,7 @@
 package panamage.jxl;
 
+import java.util.Objects;
+
 /**
  * Limits that protect decoding against decompression bombs: small files that
  * declare huge images or expand to huge metadata or JPEG files.
@@ -31,16 +33,12 @@ package panamage.jxl;
  * JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8,
  *         JxlLimits.defaults().withMaxPixels(50_000_000));
  * }
- *
- * @param maxPixels        the largest number of pixels of the image or of one
- *                         of its layers, counted as described above
- * @param maxMetadataBytes the largest size of a metadata box after
- *                         decompression, and of all application-specific
- *                         boxes together, in bytes
- * @param maxJpegBytes     the largest size of a reconstructed JPEG file, in
- *                         bytes
+ * <p>
+ * Limits are immutable. Start from {@link #defaults()} or
+ * {@link #unlimited()} and change single limits with the {@code with}
+ * methods; further limits may be added in later versions.
  */
-public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes) {
+public final class JxlLimits {
 
     /** The default pixel limit, 2^28 pixels (256 megapixels, e.g. 16384 x 16384). */
     public static final long DEFAULT_MAX_PIXELS = 1L << 28;
@@ -66,12 +64,16 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes
     /** The number of channels that count as one pixel. */
     private static final int CHANNELS_PER_PIXEL = 4;
 
+    private final long maxPixels;
+    private final long maxMetadataBytes;
+    private final long maxJpegBytes;
+
     /**
-     * Validates the limits.
+     * Creates limits.
      *
      * @throws IllegalArgumentException if a limit is not positive
      */
-    public JxlLimits {
+    private JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes) {
         if (maxPixels <= 0) {
             throw new IllegalArgumentException("maxPixels must be positive: " + maxPixels);
         }
@@ -81,18 +83,9 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes
         if (maxJpegBytes <= 0) {
             throw new IllegalArgumentException("maxJpegBytes must be positive: " + maxJpegBytes);
         }
-    }
-
-    /**
-     * Creates limits with the given pixel and metadata limits and
-     * {@link #DEFAULT_MAX_JPEG_BYTES}.
-     *
-     * @param maxPixels        the pixel limit
-     * @param maxMetadataBytes the metadata limit in bytes
-     * @throws IllegalArgumentException if a limit is not positive
-     */
-    public JxlLimits(long maxPixels, long maxMetadataBytes) {
-        this(maxPixels, maxMetadataBytes, DEFAULT_MAX_JPEG_BYTES);
+        this.maxPixels = maxPixels;
+        this.maxMetadataBytes = maxMetadataBytes;
+        this.maxJpegBytes = maxJpegBytes;
     }
 
     /**
@@ -120,6 +113,35 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes
      */
     public static JxlLimits unlimited() {
         return new JxlLimits(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE);
+    }
+
+    /**
+     * Returns the largest number of pixels of the image or of one of its
+     * layers, counted as described above.
+     *
+     * @return the pixel limit
+     */
+    public long maxPixels() {
+        return maxPixels;
+    }
+
+    /**
+     * Returns the largest size of a metadata box after decompression, and of
+     * all application-specific boxes together.
+     *
+     * @return the metadata limit in bytes
+     */
+    public long maxMetadataBytes() {
+        return maxMetadataBytes;
+    }
+
+    /**
+     * Returns the largest size of a reconstructed JPEG file.
+     *
+     * @return the JPEG limit in bytes
+     */
+    public long maxJpegBytes() {
+        return maxJpegBytes;
     }
 
     /**
@@ -153,6 +175,23 @@ public record JxlLimits(long maxPixels, long maxMetadataBytes, long maxJpegBytes
      */
     public JxlLimits withMaxJpegBytes(long maxJpegBytes) {
         return new JxlLimits(maxPixels, maxMetadataBytes, maxJpegBytes);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof JxlLimits other && maxPixels == other.maxPixels
+                && maxMetadataBytes == other.maxMetadataBytes && maxJpegBytes == other.maxJpegBytes;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(maxPixels, maxMetadataBytes, maxJpegBytes);
+    }
+
+    @Override
+    public String toString() {
+        return "JxlLimits[maxPixels=" + maxPixels + ", maxMetadataBytes=" + maxMetadataBytes + ", maxJpegBytes="
+                + maxJpegBytes + "]";
     }
 
     /**
