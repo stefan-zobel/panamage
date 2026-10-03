@@ -65,6 +65,10 @@ Put the four JARs on the class path or module path, then:
 16-bit and floating point samples are decoded with
 JxlDecoder.decode(data, channels, JxlSampleType.UINT16 or FLOAT32) as
 JxlImage.Uint16 or JxlImage.Float32, and encoded with the same precision.
+Every JxlDecoder method also reads from a java.nio.file.Path or a
+MemorySegment instead of a byte array. JxlDecodeOptions.withSrgb(true)
+converts the pixels to sRGB; the Image I/O reader does so by default
+(JxlImageReader.setConvertToSrgb(false) keeps the color space).
 
 Of an animation, JxlDecoder.decode returns the first frame;
 JxlDecoder.decodeFrames returns all frames with their durations, and
@@ -85,8 +89,9 @@ Untrusted input
 A small JPEG XL file can declare a huge image. panamage therefore rejects
 images beyond 256 megapixels, EXIF or XMP boxes beyond 16 MiB and
 reconstructed JPEG files beyond 1 GiB with a JxlLimitException. Other limits
-can be passed as JxlLimits to JxlDecoder, JxlTranscoder.toJpeg and
-JxlImageReader.setLimits, or set with the system properties
+can be passed in JxlDecodeOptions (withLimits) to JxlDecoder, JxlFrameDecoder
+and JxlTranscoder.toJpeg, to JxlImageReader.setLimits, or set with the
+system properties
 panamage.jxl.max.pixels, panamage.jxl.max.metadata.bytes and
 panamage.jxl.max.jpeg.bytes. For fully untrusted input, decoding in a
 separate process with a memory limit is the strongest protection.

@@ -7,38 +7,53 @@
 JPEG XL for Java, based on [libjxl](https://github.com/libjxl/libjxl) and the
 Foreign Function and Memory API ([Project Panama](https://openjdk.org/projects/panama/)).
 
-panamage decodes and encodes JPEG XL images, converts JPEG files losslessly to
-JPEG XL and back, reads and writes EXIF and XMP metadata, and plugs into
+panamage decodes and encodes JPEG XL images, including animations and images
+with any number of channels, converts JPEG files losslessly to JPEG XL and
+back, reads and writes EXIF, XMP and other metadata, and plugs into
 `javax.imageio`, so existing code can use `ImageIO.read` and
 `ImageIO.write(image, "jxl", ...)` without changes. The native libraries are
 bundled; nothing needs to be installed.
 
-> **Status:** 0.2.0. The API may still change before 1.0.
+> **Status:** 0.3.0. The API may still change before 1.0.
 
 ## Features
 
 - **Decode** JPEG XL (codestream and container) to gray, gray+alpha, RGB or
   RGBA with 8-bit, 16-bit or floating point samples, upright according to the
-  image orientation.
+  image orientation, in the color space of the image or converted to sRGB.
+  The input can be a byte array, a `MemorySegment` (for example a mapped file,
+  passed to libjxl without a copy) or a file, read into native memory; files
+  and segments may be larger than 2 GiB.
+- **Separate channels:** images with any number of channels, such as the
+  fluorescence channels of a microscope image, are read and written with every
+  channel in an array of its own, with its type, name and bit depth.
 - **Animations** are read and written: all frames with their duration, name
   and loop count, at once or one frame at a time; in Image I/O, every frame is
-  an image, and animations are written as sequences.
+  an image, and animations are written as sequences. GIF animations are
+  converted with their timing.
 - **Encode** 8-bit, 16-bit and floating point images lossless or lossy, with a
   quality (0 to 100) or Butteraugli distance and an effort from 1 to 10.
   Lossless encoding reproduces every sample exactly, including HDR values.
   The output can be written to a stream or channel as it is produced.
 - **Lossless JPEG transcoding:** repack an existing JPEG as JPEG XL, typically
   10 to 20 percent smaller, and restore the original JPEG bit for bit.
-- **Metadata:** EXIF and XMP are read and written; EXIF orientation and the
-  image orientation are kept consistent.
+- **Metadata:** EXIF, XMP and application-specific boxes are read and written;
+  EXIF orientation and the image orientation are kept consistent.
 - **Color:** images that are not sRGB (for example wide-gamut images) keep
-  their ICC profile, when reading and when writing.
+  their ICC profile, when reading and when writing, or are converted to sRGB
+  by libjxl's color management when decoding; the Image I/O reader converts
+  them by default.
+- **Threads:** libjxl's native threads, as many as the image size suggests:
+  small images such as thumbnails are processed on the calling thread alone.
+  The number of threads can be set per call.
 - **Image I/O plugin** with reader, writer, write parameters (lossy/lossless,
   quality, effort) and image metadata. 16-bit and floating point images are
-  read and written with full precision.
+  read and written with full precision. On a JVM that cannot run panamage,
+  Image I/O keeps working for all other formats; only the JPEG XL plugin is
+  missing.
 - **Protection against decompression bombs:** images beyond 256 megapixels and
-  metadata boxes beyond 16 MiB are rejected before their memory is allocated;
-  both limits are configurable.
+  metadata beyond 16 MiB are rejected before their memory is allocated; the
+  limits are configurable.
 - **Bundled native libraries** for Windows on x86_64, Linux on x86_64 and
   aarch64 (glibc and musl), and macOS on Apple silicon, found through a service
   interface on both the class path and the module path.
@@ -68,12 +83,12 @@ each platform the application runs on:
 <dependency>
     <groupId>net.sourceforge.streamsupport</groupId>
     <artifactId>panamage-jxl-imageio</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 <dependency>
     <groupId>net.sourceforge.streamsupport</groupId>
     <artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <scope>runtime</scope>
 </dependency>
 ```
@@ -81,8 +96,8 @@ each platform the application runs on:
 With Gradle:
 
 ```kotlin
-implementation("net.sourceforge.streamsupport:panamage-jxl-imageio:0.2.0")
-runtimeOnly("net.sourceforge.streamsupport:panamage-jxl-natives-windows-x86_64:0.2.0")
+implementation("net.sourceforge.streamsupport:panamage-jxl-imageio:0.3.0")
+runtimeOnly("net.sourceforge.streamsupport:panamage-jxl-natives-windows-x86_64:0.3.0")
 ```
 
 The other native artifacts are `panamage-jxl-natives-linux-x86_64`,
@@ -94,7 +109,7 @@ library, such as Alpine Linux and the container images based on it, need the
 one matching the system is used.
 
 To try panamage without a build tool, download
-`panamage-0.2.0-windows-x86_64.zip` or `panamage-0.2.0-<platform>.tar.gz` for
+`panamage-0.3.0-windows-x86_64.zip` or `panamage-0.3.0-<platform>.tar.gz` for
 `linux-x86_64`, `linux-aarch64`, `linux-musl-x86_64`, `linux-musl-aarch64` or
 `macos-aarch64` from the [Releases](../../releases) page and unpack it. It
 contains the JARs, a README and a small example program:
@@ -118,6 +133,10 @@ For your own application, put these JARs on the class path or module path:
 | `panamage-jxl-imageio` | Image I/O plugin (`panamage.jxl.imageio`) |
 | `panamage-jxl-spi` | Service interface for the native libraries |
 | `panamage-jxl-natives-<platform>` (`windows-x86_64`, `linux-x86_64`, `linux-aarch64`, `linux-musl-x86_64`, `linux-musl-aarch64` or `macos-aarch64`) | libjxl for the platform |
+
+A plugin for ImageJ and Fiji, `panamage-jxl-imagej`, is attached to the
+[Releases](../../releases) page; it is not on Maven Central. A Fiji update
+site will follow.
 
 ## Usage
 
@@ -150,7 +169,20 @@ try (ImageOutputStream out = ImageIO.createImageOutputStream(new File("photo.jxl
 
 `ImageIO.read` and `ImageIO.write` do not carry metadata; use `readAll` and
 `write(IIOMetadata, IIOImage, ImageWriteParam)` as above, or
-`JxlImageMetadata` to set EXIF and XMP yourself.
+`JxlImageMetadata` to set EXIF, XMP and application-specific boxes
+(`setBoxes`) yourself.
+
+The reader converts images in another color space than sRGB (such as Display
+P3 or Adobe RGB) to sRGB, so they look right in code that assumes sRGB; the
+image metadata keeps their ICC profile. `setConvertToSrgb(false)` keeps the
+color space of the image, with its ICC profile in the color model, and so does
+a destination type with that color space from `getImageTypes`:
+
+```java
+JxlImageReader reader = (JxlImageReader) ImageIO.getImageReadersByFormatName("jxl").next();
+reader.setConvertToSrgb(false);
+reader.setThreads(JxlThreads.none());                   // see Threads below
+```
 
 An animation has one image per frame: `getNumImages(true)` returns the number
 of frames, `read(i)` returns frame `i` as it is displayed, and
@@ -175,7 +207,24 @@ The duration of each frame comes from `JxlImageMetadata.setFrameInfo`, the
 tick rate and the loop count from `setAnimationHeader` of the first frame;
 without them, a frame is shown for 100 ms and the animation plays forever.
 Metadata read from a JPEG XL animation carries these values, so `readAll` of
-every frame followed by `writeToSequence` keeps the timing.
+every frame followed by `writeToSequence` keeps the timing. The same works for
+GIF animations: the writer understands the metadata of the JDK's GIF reader
+(frame delays, loop count) and composes partial GIF frames as browsers show
+them:
+
+```java
+ImageReader gif = ImageIO.getImageReadersByFormatName("gif").next();
+gif.setInput(ImageIO.createImageInputStream(new File("animation.gif")));
+ImageWriter writer = ImageIO.getImageWritersByFormatName("jxl").next();
+try (ImageOutputStream out = ImageIO.createImageOutputStream(new File("animation.jxl"))) {
+    writer.setOutput(out);
+    writer.prepareWriteSequence(gif.getStreamMetadata());   // the size of the GIF screen
+    for (int i = 0; i < gif.getNumImages(true); i++) {
+        writer.writeToSequence(gif.readAll(i, null), null);
+    }
+    writer.endWriteSequence();
+}
+```
 
 ### Lossless JPEG transcoding
 
@@ -183,6 +232,9 @@ every frame followed by `writeToSequence` keeps the timing.
 byte[] jpeg = Files.readAllBytes(Path.of("photo.jpg"));
 byte[] jxl = JxlTranscoder.fromJpeg(jpeg);              // smaller, lossless
 byte[] restored = JxlTranscoder.toJpeg(jxl);            // identical to jpeg
+
+byte[] fromFile = JxlTranscoder.fromJpeg(Path.of("photo.jpg"),
+        JxlEncodeOptions.ofLossless().withEffort(9));   // only the effort and the threads apply
 ```
 
 ### Decoder and encoder
@@ -202,8 +254,27 @@ byte[] lossless = JxlEncoder.encode(image, JxlEncodeOptions.ofLossless());
 byte[] lossy = JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90).withEffort(9), metadata);
 ```
 
-`JxlDecoder.decode(data)` and `decode(data, channels)` return 8-bit samples
-(`JxlImage.Uint8`).
+`JxlDecoder.decode(data)` returns 8-bit RGBA samples (`JxlImage.Uint8`).
+
+Every reading method takes the image as a `byte[]`, a `MemorySegment` or a
+`Path`, with the same parameters otherwise. `JxlDecodeOptions` holds the
+limits (see below), the color space of the decoded pixels and the threads;
+the methods without options use `JxlDecodeOptions.defaults()`, which keeps the
+color space of the image:
+
+```java
+JxlImage srgb = JxlDecoder.decode(Path.of("photo.jxl"), 4, JxlSampleType.UINT8,
+        JxlDecodeOptions.defaults().withSrgb(true));      // converted by libjxl
+```
+
+Besides EXIF and XMP, `JxlMetadata` carries application-specific boxes, which
+are written Brotli-compressed by default:
+
+```java
+JxlMetadata withBox = metadata.withBoxes(List.of(JxlBox.of("abcd", content)));
+byte[] encoded = JxlEncoder.encode(image, JxlEncodeOptions.ofLossless(), withBox);
+JxlBox box = JxlDecoder.readMetadata(encoded).box("abcd");
+```
 
 `JxlEncoder.encode`, `JxlTranscoder.fromJpeg` and `JxlTranscoder.toJpeg` can
 also write to an `OutputStream` or a `WritableByteChannel` as the output is
@@ -215,6 +286,31 @@ try (OutputStream out = Files.newOutputStream(Path.of("output.jxl"))) {
     JxlEncoder.encode(image, JxlEncodeOptions.ofQuality(90), metadata, out);
 }
 ```
+
+### Separate channels
+
+`JxlChannels` holds every channel in an array of its own: the color channels
+(gray or RGB) and any number of extra channels with a type and a name, such
+as alpha, a depth map or the fluorescence channels of a microscope image:
+
+```java
+JxlChannels image = JxlChannels.builder(width, height)
+        .gray(dapi)                                       // short[] each
+        .add("GFP", gfp)
+        .add("mCherry", mcherry)
+        .bitsPerSample(12)
+        .build();
+byte[] jxl = JxlEncoder.encode(image, JxlEncodeOptions.ofLossless());
+
+List<JxlExtraChannelInfo> extra = JxlDecoder.readExtraChannels(jxl);  // types, names, bit depths
+JxlChannels decoded = JxlDecoder.decodeChannels(jxl, JxlSampleType.UINT16);
+```
+
+Integer samples keep their values when the requested type can hold them: a
+12-bit channel decoded to `UINT16` has values from 0 to 4095. Images with more
+than 4 extra channels need codestream level 10, which some decoders may not
+support. `JxlFrameEncoder` and `JxlFrameDecoder.openChannels` handle
+animations with separate channels.
 
 ### Animations
 
@@ -246,9 +342,8 @@ try (OutputStream out = Files.newOutputStream(Path.of("animation.jxl"));
     encoder.finish();                                             // without it, the file is incomplete
 }
 
-JxlAnimationHeader header = new JxlAnimationHeader(animation.ticksPerSecondNumerator(),
-        animation.ticksPerSecondDenominator(), animation.loops());
-byte[] copy = JxlEncoder.encodeAnimation(frames, header, JxlEncodeOptions.ofLossless(), JxlMetadata.NONE);
+byte[] copy = JxlEncoder.encodeAnimation(frames, animation.header(),        // the tick rate and loops
+        JxlEncodeOptions.ofLossless(), JxlMetadata.NONE);
 ```
 
 Frame durations are given in ticks of the `JxlAnimationHeader`. Every frame
@@ -269,13 +364,14 @@ bound, so panamage checks the size first and throws a `JxlLimitException`
   `decodeFrames` holds all frames of an animation at once, so there the limit
   applies to all frames together; `JxlFrameDecoder` applies it to each frame.
 - **Metadata:** by default at most 16 MiB for each EXIF or XMP box after
-  decompression.
+  decompression, and for all application-specific boxes together.
 - **JPEG reconstruction:** by default at most 1 GiB for the JPEG file that
   `JxlTranscoder.toJpeg` restores.
 
 ```java
 JxlLimits limits = JxlLimits.defaults().withMaxPixels(50_000_000);
-JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8, limits);
+JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8,
+        JxlDecodeOptions.defaults().withLimits(limits));
 ((JxlImageReader) reader).setLimits(limits);                    // Image I/O
 ```
 
@@ -294,6 +390,46 @@ so a hostile file can still make libjxl allocate more than the limit. For
 fully untrusted input, decoding in a separate process with a memory limit is
 the strongest protection.
 
+### Threads
+
+libjxl processes an image in groups of 256 x 256 pixels on its own native
+threads, which never call back into Java. By default (`JxlThreads.auto()`),
+the number of threads follows the size of the image: an image of up to one
+group, such as a thumbnail, is processed on the calling thread alone, a large
+image by up to one thread per processor. For JPEG transcoding, the size is
+read from the JPEG header. `JxlThreads.none()` keeps all work on the calling
+thread, for example in a server that already processes many images in
+parallel, and `JxlThreads.fixed(n)` uses `n` threads:
+
+```java
+JxlDecodeOptions single = JxlDecodeOptions.defaults().withThreads(JxlThreads.none());
+JxlEncodeOptions four = JxlEncodeOptions.ofQuality(90).withThreads(JxlThreads.fixed(4));
+```
+
+In Image I/O, `JxlImageReader.setThreads` and `JxlImageWriteParam.setThreads`
+do the same. Headers and metadata are always read on the calling thread.
+
+## Upgrading from 0.2
+
+0.3.0 changes some of the API and behavior of 0.2:
+
+- `JxlLimits`, `JxlDecodeOptions`, `JxlEncodeOptions` and the information
+  types (`JxlImageInfo`, `JxlFrameInfo`, `JxlAnimationInfo`,
+  `JxlExtraChannelInfo`) are classes instead of records, so that they can
+  grow without breaking code. Options are created with `defaults()`,
+  `unlimited()` and the `of` methods and changed with the `with` methods; the
+  accessors are unchanged, record patterns no longer work.
+- The overloads with a `JxlLimits` parameter are gone: pass
+  `JxlDecodeOptions.defaults().withLimits(limits)` instead. The same goes for
+  `JxlTranscoder.toJpeg`, and `JxlTranscoder.fromJpeg` takes
+  `JxlEncodeOptions` instead of an effort.
+- `JxlDecoder.decode(data, channels)` is gone: use
+  `decode(data, channels, JxlSampleType.UINT8)`.
+- The Image I/O reader converts images in another color space than sRGB to
+  sRGB; `setConvertToSrgb(false)` restores the behavior of 0.2.
+- Small images are decoded and encoded without starting threads (see
+  [Threads](#threads)), which makes them two to three times faster.
+
 ## JDK 21
 
 On JDK 21, the Foreign Function and Memory API is a preview feature with a
@@ -306,12 +442,12 @@ as for JDK 25:
 <dependency>
     <groupId>net.sourceforge.streamsupport</groupId>
     <artifactId>panamage-jxl-jdk21</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 <dependency>
     <groupId>net.sourceforge.streamsupport</groupId>
     <artifactId>panamage-jxl-natives-windows-x86_64</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <scope>runtime</scope>
 </dependency>
 ```
@@ -326,6 +462,10 @@ as for JDK 25:
   ```
 
 - It has no module descriptor and is meant for the class path.
+- Without `--enable-preview`, or on Java 8 to 24 with `panamage-jxl-imageio`,
+  Image I/O keeps working for all other formats; the JPEG XL reader and
+  writer are missing, and the logger `panamage.jxl.imageio.JxlFormat` reports
+  why at level `FINE`.
 - It is not part of the release archives; the JAR is attached to the GitHub
   release.
 
@@ -349,6 +489,9 @@ and should be private to the user, too.
 
 The loaded library must have the libjxl version the bindings were generated
 for (0.12.x). `JxlNative.librarySource()` tells where the library came from.
+The conversion to sRGB needs `libjxl_cms`, which all bundled libraries
+include; with a system libjxl without it, decoded pixels keep their color
+space.
 
 libjxl publishes no binaries for macOS, Linux on aarch64 and musl-based Linux,
 and its DLLs for Windows need a newer Microsoft Visual C++ runtime than some
@@ -393,12 +536,17 @@ jextract, the libjxl release for Windows and the Linux JDK, which only the
 helper scripts need. The libraries for Windows, macOS, Linux aarch64 and
 musl-based Linux are checked in under `natives/`.
 
-`panamage-jxl-jdk21` is built only with the profile `jdk21`
-(`./mvnw -Pjdk21 verify`). It needs a JDK 21 in `~/.m2/toolchains.xml` as
+`panamage-jxl-jdk21` and the ImageJ/Fiji plugin `panamage-jxl-imagej` are
+built only with the profile `jdk21` (`./mvnw -Pjdk21 verify`); the plugin
+needs the SciJava Maven repository, which its POM names. It needs a JDK 21 in `~/.m2/toolchains.xml` as
 well, with `<version>21</version>`, and Python: its sources are generated
 from those of `panamage-jxl` and `panamage-jxl-imageio` by
 `scripts/make_jdk21_variant.py`, run with `python` from the `PATH` or with
 `-Dpython.executable=...`.
+
+With `-Djdk8.home=...` and `-Djdk21.home=...`, the build also checks that the
+Image I/O plugin stays out of the way on a JDK 8 and on a JDK 21 without
+`--enable-preview`; without them, these tests are skipped.
 
 The tools go to `.tools` in the project. To keep them elsewhere, set the
 environment variable `PANAMAGE_TOOLS_DIR` or pass `-Dtools.dir=...` to Maven
@@ -418,6 +566,7 @@ Other scripts in `scripts/`:
 | `build_libjxl_windows.py` | Build the libjxl DLLs for Windows x86_64 from source with the static runtime (Visual Studio with clang-cl; used by the workflow below) |
 | `make_jdk21_variant.py` | Generate the sources of `panamage-jxl-jdk21` (`--generate`, run by Maven) and regenerate its checked-in jextract 21 bindings (`--update-bindings`) |
 | `write_toolchains.py` | Write a Maven toolchains file for a JDK 25 and, with `--jdk21`, a JDK 21 |
+| `make_update_site.py` | Build the Fiji update site from the release files and upload it (`--site NAME --webdav-user USER`, or `--local-site DIR` for a test) |
 
 Every build also creates sources and Javadoc JARs. The JARs are reproducible:
 `project.build.outputTimestamp` fixes the time stamps, so the same sources
@@ -427,8 +576,9 @@ give byte-identical JARs.
 
 Releases are built and uploaded by hand:
 
-1. Set the release version in all POMs and update the status line and
-   "Getting started" in this README.
+1. Set the release version in all POMs and `project.build.outputTimestamp` to
+   the release date, and update the status line and "Getting started" in this
+   README.
 2. Build, test and sign:
 
    ```sh
@@ -446,8 +596,10 @@ Releases are built and uploaded by hand:
    [Central Portal](https://central.sonatype.com/publishing) (Publish
    Component), wait for the validation and publish it.
 4. Tag the release commit and create the GitHub release with the other files
-   of `dist/<version>`, including `SHA256SUMS`.
-5. Set the next snapshot version.
+   of `dist/<version>`, including `SHA256SUMS`, `panamage-jxl-jdk21` and the
+   ImageJ/Fiji plugin `panamage-jxl-imagej`.
+5. Update the Fiji update site with `make_update_site.py`.
+6. Set the next snapshot version.
 
 ## Continuous integration
 
@@ -457,6 +609,8 @@ Five GitHub Actions workflows, all started manually (Actions, Run workflow):
   aarch64, macOS arm64 and Windows x86_64, each with its own native libraries
   and including `panamage-jxl-jdk21` on JDK 21, and on Alpine Linux on x86_64
   and aarch64 in a container; the platforms can be chosen when starting it.
+  The hosted jobs also check the Image I/O plugin on JDK 21 without
+  `--enable-preview`, and the Linux x86_64 job on JDK 8.
   The test reports are kept as workflow artifacts.
 - **libjxl for macOS arm64** builds the libjxl libraries for macOS from source
   and checks them; its artifact is what `natives/` contains.
