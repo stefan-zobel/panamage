@@ -375,7 +375,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
                 JxlDecoder.checkChannels(channels);
             }
             JxlDecoder.checkFrames(input, limits, Integer.MAX_VALUE, allTogether, arena);
-            decoder = NativeDecoder.create();
+            decoder = NativeDecoder.create(options.threads());
             MemorySegment handle = decoder.handle();
             // JxlImage and JxlChannels promise straight alpha, also for images stored with premultiplied alpha.
             NativeDecoder.check(Jxl.JxlDecoderSetUnpremultiplyAlpha(handle, Jxl.JXL_TRUE()),
@@ -391,6 +391,7 @@ public final class JxlFrameDecoder implements AutoCloseable {
             }
             MemorySegment info = JxlDecoder.basicInfo(handle, arena);
             JxlDecoder.checkImage(info, limits);
+            decoder.fitThreads(info);
             return new JxlFrameDecoder(arena, decoder, channels, type, info, options.srgb());
         } catch (RuntimeException | Error e) {
             if (decoder != null) {

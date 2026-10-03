@@ -31,7 +31,10 @@ class ValueTypesTest {
         assertEqualValues(options, JxlDecodeOptions.defaults().withSrgb(true).withLimits(limits));
         assertNotEquals(options, options.withSrgb(false));
         assertNotEquals(options, options.withLimits(JxlLimits.unlimited()));
-        assertEquals("JxlDecodeOptions[limits=" + limits + ", srgb=true]", options.toString());
+        assertNotEquals(options, options.withThreads(JxlThreads.none()));
+        assertEquals(options, options.withThreads(JxlThreads.auto()));
+        assertEquals("JxlDecodeOptions[limits=" + limits + ", srgb=true, threads=JxlThreads[auto]]",
+                options.toString());
     }
 
     @Test
@@ -48,8 +51,12 @@ class ValueTypesTest {
         assertNotEquals(lossy, lossy.withEffort(4));
         assertNotEquals(lossy, JxlEncodeOptions.ofDistance(2.0f).withEffort(3));
         assertNotEquals(lossless, JxlEncodeOptions.ofDistance(0.1f));
-        assertEquals("JxlEncodeOptions[lossless=false, distance=1.5, effort=3]", lossy.toString());
-        assertEquals("JxlEncodeOptions[lossless=true, distance=0.0, effort=7]", lossless.toString());
+        assertNotEquals(lossy, lossy.withThreads(JxlThreads.fixed(2)));
+        assertEqualValues(lossy.withThreads(JxlThreads.fixed(2)), lossy.withThreads(JxlThreads.fixed(2)));
+        assertEquals("JxlEncodeOptions[lossless=false, distance=1.5, effort=3, threads=JxlThreads[auto]]",
+                lossy.toString());
+        assertEquals("JxlEncodeOptions[lossless=true, distance=0.0, effort=7, threads=JxlThreads[none]]",
+                lossless.withThreads(JxlThreads.none()).toString());
     }
 
     @Test

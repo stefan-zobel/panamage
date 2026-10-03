@@ -7,33 +7,30 @@ import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 import java.lang.foreign.*;
 import static java.lang.foreign.ValueLayout.*;
-final class constants$49 {
+final class constants$50 {
 
     // Suppresses default constructor, ensuring non-instantiability.
-    private constants$49() {}
+    private constants$50() {}
     static final MethodHandle const$0 = RuntimeHelper.downcallHandle(
-        "JxlEncoderCollectStats",
-        constants$17.const$0
+        "JxlResizableParallelRunnerDestroy",
+        constants$5.const$3
     );
     static final MethodHandle const$1 = RuntimeHelper.downcallHandle(
-        "JxlResizableParallelRunner",
+        "JxlThreadParallelRunner",
         constants$19.const$1
     );
     static final MethodHandle const$2 = RuntimeHelper.downcallHandle(
-        "JxlResizableParallelRunnerCreate",
-        constants$20.const$1
+        "JxlThreadParallelRunnerCreate",
+        constants$4.const$3
     );
     static final MethodHandle const$3 = RuntimeHelper.downcallHandle(
-        "JxlResizableParallelRunnerSetThreads",
-        constants$21.const$0
+        "JxlThreadParallelRunnerDestroy",
+        constants$5.const$3
     );
-    static final FunctionDescriptor const$4 = FunctionDescriptor.of(JAVA_INT,
-        JAVA_LONG,
-        JAVA_LONG
-    );
+    static final FunctionDescriptor const$4 = FunctionDescriptor.of(JAVA_LONG);
     static final MethodHandle const$5 = RuntimeHelper.downcallHandle(
-        "JxlResizableParallelRunnerSuggestThreads",
-        constants$49.const$4
+        "JxlThreadParallelRunnerDefaultNumWorkerThreads",
+        constants$50.const$4
     );
 }
 

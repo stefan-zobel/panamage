@@ -73,9 +73,10 @@ MODULE_ONLY_TESTS = ["panamage/jxl/ModuleSetupTest.java"]
 LOOKUP_PATTERN = re.compile(r"SymbolLookup loaderLookup = SymbolLookup\.loaderLookup\(\);\s*"
                             r"SYMBOL_LOOKUP = [^;]+;")
 LOOKUP_REPLACEMENT = "SYMBOL_LOOKUP = panamage.jxl.internal.NativeLibraries.lookup();"
-RUNNER_ADDRESS = "Jxl.JxlThreadParallelRunner$address()"
-RUNNER_LOOKUP = ('panamage.jxl.internal.NativeLibraries.lookup().find("JxlThreadParallelRunner")'
-                 '.orElseThrow()')
+# jextract 21 has no address getters for functions; the address of a native
+# function (such as the parallel runner) is looked up by name instead.
+FUNCTION_ADDRESS = re.compile(r"Jxl\.(\w+)\$address\(\)")
+FUNCTION_LOOKUP = r'panamage.jxl.internal.NativeLibraries.lookup().find("\1").orElseThrow()'
 
 # C types whose size differs between 64-bit platforms (long is 32 bits on Windows);
 # jextract 21 declares them with the size of the platform it runs on.
@@ -237,7 +238,7 @@ def port_source(text: str, structs: dict[str, tuple[set[str], set[str]]]) -> str
     text = port_struct_accessors(text, structs)
     text = re.sub(r"\.allocateFrom\(((?:ValueLayout\.)?JAVA_\w+),", r".allocateArray(\1,", text)
     text = text.replace(".allocateFrom(", ".allocateUtf8String(")
-    return text.replace(RUNNER_ADDRESS, RUNNER_LOOKUP)
+    return FUNCTION_ADDRESS.sub(FUNCTION_LOOKUP, text)
 
 
 def port_tree(root: Path, structs: dict[str, tuple[set[str], set[str]]]) -> None:

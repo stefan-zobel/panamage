@@ -296,7 +296,7 @@ public final class JxlEncoder {
         if (image.channels() > 4) {
             throw new IllegalArgumentException("At most 4 channels are supported: " + image.channels());
         }
-        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
+        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create(options.threads())) {
             if (!metadata.isEmpty()) {
                 encoder.check(Jxl.JxlEncoderUseContainer(encoder.handle(), Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
                 encoder.check(Jxl.JxlEncoderUseBoxes(encoder.handle()), "JxlEncoderUseBoxes");
@@ -323,7 +323,7 @@ public final class JxlEncoder {
         Objects.requireNonNull(options, "options");
         Objects.requireNonNull(metadata, "metadata");
         checkWritable(image.extraChannels());
-        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
+        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create(options.threads())) {
             if (!metadata.isEmpty()) {
                 encoder.check(Jxl.JxlEncoderUseContainer(encoder.handle(), Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
                 encoder.check(Jxl.JxlEncoderUseBoxes(encoder.handle()), "JxlEncoderUseBoxes");
@@ -491,6 +491,7 @@ public final class JxlEncoder {
     private static void configure(NativeEncoder encoder, int width, int height, JxlSampleType type, int bits,
             int colorChannels, List<JxlExtraChannel> extraChannels, byte[] iccProfile, JxlEncodeOptions options,
             int orientation, JxlAnimationHeader animation, Arena arena) {
+        encoder.fitThreads(width, height);
         boolean gray = colorChannels == 1;
         // libjxl describes the first extra channel through the alpha fields if it is an alpha channel.
         boolean alpha = !extraChannels.isEmpty() && extraChannels.getFirst().type() == JxlChannelType.ALPHA;

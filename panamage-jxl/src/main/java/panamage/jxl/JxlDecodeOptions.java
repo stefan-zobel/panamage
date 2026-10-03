@@ -5,8 +5,9 @@ import java.util.Objects;
 /**
  * Settings for decoding with {@link JxlDecoder} and {@link JxlFrameDecoder}:
  * the {@link JxlLimits} and the color space of the decoded pixels. Reading
- * metadata and {@link JxlTranscoder#toJpeg(byte[], JxlDecodeOptions)} use
- * only the limits.
+ * metadata uses only the limits;
+ * {@link JxlTranscoder#toJpeg(byte[], JxlDecodeOptions)} uses the limits and
+ * the threads.
  * {@snippet :
  * JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8,
  *         JxlDecodeOptions.defaults().withSrgb(true));
@@ -23,6 +24,10 @@ import java.util.Objects;
  * cannot convert an image, its pixels keep their color space and
  * {@link JxlImage#iccProfile()} describes it.
  * <p>
+ * {@link #withThreads(JxlThreads)} sets how many native threads libjxl uses to
+ * decode the pixels; by default, {@link JxlThreads#auto()} chooses them by
+ * the image size. Reading headers and metadata uses no threads.
+ * <p>
  * Options are immutable. Start from {@link #defaults()} and change single
  * settings with the {@code with} methods; further settings may be added in
  * later versions.
@@ -31,25 +36,28 @@ public final class JxlDecodeOptions {
 
     private final JxlLimits limits;
     private final boolean srgb;
+    private final JxlThreads threads;
 
     /**
      * Creates options.
      *
-     * @throws NullPointerException if {@code limits} is {@code null}
+     * @throws NullPointerException if {@code limits} or {@code threads} is
+     *                              {@code null}
      */
-    JxlDecodeOptions(JxlLimits limits, boolean srgb) {
+    private JxlDecodeOptions(JxlLimits limits, boolean srgb, JxlThreads threads) {
         this.limits = Objects.requireNonNull(limits, "limits");
         this.srgb = srgb;
+        this.threads = Objects.requireNonNull(threads, "threads");
     }
 
     /**
-     * Returns the default options: {@link JxlLimits#defaults()} and the color
-     * space of the image.
+     * Returns the default options: {@link JxlLimits#defaults()}, the color
+     * space of the image and {@link JxlThreads#auto()}.
      *
      * @return the default options
      */
     public static JxlDecodeOptions defaults() {
-        return new JxlDecodeOptions(JxlLimits.defaults(), false);
+        return new JxlDecodeOptions(JxlLimits.defaults(), false, JxlThreads.auto());
     }
 
     /**
@@ -71,6 +79,15 @@ public final class JxlDecodeOptions {
     }
 
     /**
+     * Returns how many native threads libjxl uses to decode the pixels.
+     *
+     * @return the thread setting
+     */
+    public JxlThreads threads() {
+        return threads;
+    }
+
+    /**
      * Returns a copy of these options with different limits.
      *
      * @param limits the new limits
@@ -78,7 +95,7 @@ public final class JxlDecodeOptions {
      * @throws NullPointerException if {@code limits} is {@code null}
      */
     public JxlDecodeOptions withLimits(JxlLimits limits) {
-        return new JxlDecodeOptions(limits, srgb);
+        return new JxlDecodeOptions(limits, srgb, threads);
     }
 
     /**
@@ -89,21 +106,33 @@ public final class JxlDecodeOptions {
      * @return the new options
      */
     public JxlDecodeOptions withSrgb(boolean srgb) {
-        return new JxlDecodeOptions(limits, srgb);
+        return new JxlDecodeOptions(limits, srgb, threads);
+    }
+
+    /**
+     * Returns a copy of these options with a different thread setting.
+     *
+     * @param threads how many native threads libjxl uses to decode the pixels
+     * @return the new options
+     * @throws NullPointerException if {@code threads} is {@code null}
+     */
+    public JxlDecodeOptions withThreads(JxlThreads threads) {
+        return new JxlDecodeOptions(limits, srgb, threads);
     }
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof JxlDecodeOptions other && limits.equals(other.limits) && srgb == other.srgb;
+        return obj instanceof JxlDecodeOptions other && limits.equals(other.limits) && srgb == other.srgb
+                && threads.equals(other.threads);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(limits, srgb);
+        return Objects.hash(limits, srgb, threads);
     }
 
     @Override
     public String toString() {
-        return "JxlDecodeOptions[limits=" + limits + ", srgb=" + srgb + "]";
+        return "JxlDecodeOptions[limits=" + limits + ", srgb=" + srgb + ", threads=" + threads + "]";
     }
 }

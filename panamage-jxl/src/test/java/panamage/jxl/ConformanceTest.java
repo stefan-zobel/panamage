@@ -244,7 +244,8 @@ class ConformanceTest {
 
     /** Reads whether the image stores its alpha channel premultiplied. */
     private static boolean storesPremultipliedAlpha(byte[] input) {
-        try (Arena arena = Arena.ofConfined(); NativeDecoder decoder = NativeDecoder.create()) {
+        try (Arena arena = Arena.ofConfined();
+                NativeDecoder decoder = NativeDecoder.create(JxlThreads.auto())) {
             decoder.start(Jxl.JXL_DEC_BASIC_INFO(), arena.allocateFrom(JAVA_BYTE, input));
             assertEquals(Jxl.JXL_DEC_BASIC_INFO(), Jxl.JxlDecoderProcessInput(decoder.handle()));
             MemorySegment info = arena.allocate(JxlBasicInfo.layout());

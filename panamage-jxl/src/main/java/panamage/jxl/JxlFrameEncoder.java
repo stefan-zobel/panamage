@@ -149,7 +149,7 @@ public final class JxlFrameEncoder implements AutoCloseable {
         Arena arena = Arena.ofShared();
         NativeEncoder encoder = null;
         try {
-            encoder = NativeEncoder.create();
+            encoder = NativeEncoder.create(options.threads());
             if (!metadata.isEmpty()) {
                 encoder.check(Jxl.JxlEncoderUseContainer(encoder.handle(), Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
                 encoder.check(Jxl.JxlEncoderUseBoxes(encoder.handle()), "JxlEncoderUseBoxes");

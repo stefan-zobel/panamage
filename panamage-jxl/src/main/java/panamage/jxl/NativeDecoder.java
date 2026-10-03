@@ -5,6 +5,7 @@ import static java.lang.foreign.MemorySegment.NULL;
 import java.lang.foreign.MemorySegment;
 
 import panamage.jxl.ffi.Jxl;
+import panamage.jxl.ffi.JxlBasicInfo;
 
 /**
  * Owns a native {@code JxlDecoder} together with its thread pool, if any.
@@ -23,25 +24,31 @@ final class NativeDecoder implements AutoCloseable {
     }
 
     /**
-     * Creates a decoder that uses libjxl's native thread pool.
+     * Creates a decoder that uses libjxl's native thread pool as the setting
+     * says; with {@link JxlThreads#auto()}, call {@link #fitThreads} when the
+     * image size is known.
      *
      * @return the new decoder
      * @throws JxlException if the decoder cannot be created
      */
-    static NativeDecoder create() {
-        ParallelRunner runner = ParallelRunner.create();
+    static NativeDecoder create(JxlThreads threads) {
+        ParallelRunner runner = ParallelRunner.create(threads);
         MemorySegment handle = Jxl.JxlDecoderCreate(NULL);
         if (handle.equals(NULL)) {
-            runner.close();
+            if (runner != null) {
+                runner.close();
+            }
             throw new JxlException("JxlDecoderCreate failed");
         }
         NativeDecoder decoder = new NativeDecoder(runner, handle);
-        try {
-            check(Jxl.JxlDecoderSetParallelRunner(handle, runner.function(), runner.opaque()),
-                    "JxlDecoderSetParallelRunner");
-        } catch (JxlException e) {
-            decoder.close();
-            throw e;
+        if (runner != null) {
+            try {
+                check(Jxl.JxlDecoderSetParallelRunner(handle, runner.function(), runner.opaque()),
+                        "JxlDecoderSetParallelRunner");
+            } catch (JxlException e) {
+                decoder.close();
+                throw e;
+            }
         }
         return decoder;
     }
@@ -63,6 +70,22 @@ final class NativeDecoder implements AutoCloseable {
 
     MemorySegment handle() {
         return handle;
+    }
+
+    /**
+     * Sizes an automatic thread pool for the image described by the basic
+     * info, which the decoder reports before it decodes pixels.
+     */
+    void fitThreads(MemorySegment basicInfo) {
+        if (runner != null) {
+            runner.fitTo(Integer.toUnsignedLong(JxlBasicInfo.xsize(basicInfo)),
+                    Integer.toUnsignedLong(JxlBasicInfo.ysize(basicInfo)));
+        }
+    }
+
+    /** Returns the thread pool, or {@code null}; for tests. */
+    ParallelRunner runner() {
+        return runner;
     }
 
     /**

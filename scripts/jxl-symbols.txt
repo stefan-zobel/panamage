@@ -302,6 +302,13 @@
 --include-typedef JxlParallelRunInit
 --include-typedef JxlParallelRunner
 
+# resizable_parallel_runner.h
+--include-function JxlResizableParallelRunner
+--include-function JxlResizableParallelRunnerCreate
+--include-function JxlResizableParallelRunnerDestroy
+--include-function JxlResizableParallelRunnerSetThreads
+--include-function JxlResizableParallelRunnerSuggestThreads
+
 # stats.h
 --include-constant JXL_ENC_NUM_STATS
 --include-constant JXL_ENC_STAT_AC_BITS

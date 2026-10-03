@@ -11,7 +11,7 @@ import java.lang.foreign.MemorySegment;
 import panamage.jxl.ffi.Jxl;
 
 /**
- * Owns a native {@code JxlEncoder} together with its thread pool.
+ * Owns a native {@code JxlEncoder} together with its thread pool, if any.
  * <p>
  * Closing destroys the encoder first and then the thread pool it refers to.
  */
@@ -23,6 +23,7 @@ final class NativeEncoder implements AutoCloseable {
     /** libjxl requires at least this much output space per call. */
     static final int MIN_OUTPUT_CHUNK_SIZE = 32;
 
+    /** The thread pool, or {@code null} for an encoder that runs on the calling thread. */
     private final ParallelRunner runner;
     private final MemorySegment handle;
 
@@ -32,31 +33,56 @@ final class NativeEncoder implements AutoCloseable {
     }
 
     /**
-     * Creates an encoder that uses libjxl's native thread pool.
+     * Creates an encoder that uses libjxl's native thread pool as the setting
+     * says; with {@link JxlThreads#auto()}, call {@link #fitThreads} when the
+     * image size is known.
      *
      * @return the new encoder
      * @throws JxlException if the encoder cannot be created
      */
-    static NativeEncoder create() {
-        ParallelRunner runner = ParallelRunner.create();
+    static NativeEncoder create(JxlThreads threads) {
+        ParallelRunner runner = ParallelRunner.create(threads);
         MemorySegment handle = Jxl.JxlEncoderCreate(NULL);
         if (handle.equals(NULL)) {
-            runner.close();
+            if (runner != null) {
+                runner.close();
+            }
             throw new JxlException("JxlEncoderCreate failed");
         }
         NativeEncoder encoder = new NativeEncoder(runner, handle);
-        try {
-            encoder.check(Jxl.JxlEncoderSetParallelRunner(handle, runner.function(), runner.opaque()),
-                    "JxlEncoderSetParallelRunner");
-        } catch (JxlException e) {
-            encoder.close();
-            throw e;
+        if (runner != null) {
+            try {
+                encoder.check(Jxl.JxlEncoderSetParallelRunner(handle, runner.function(), runner.opaque()),
+                        "JxlEncoderSetParallelRunner");
+            } catch (JxlException e) {
+                encoder.close();
+                throw e;
+            }
         }
         return encoder;
     }
 
     MemorySegment handle() {
         return handle;
+    }
+
+    /** Sizes an automatic thread pool for an image of the given size. */
+    void fitThreads(long xsize, long ysize) {
+        if (runner != null) {
+            runner.fitTo(xsize, ysize);
+        }
+    }
+
+    /** Sizes an automatic thread pool for an input whose size only libjxl knows. */
+    void fitThreadsToUnknownSize() {
+        if (runner != null) {
+            runner.fitToUnknownSize();
+        }
+    }
+
+    /** Returns the thread pool, or {@code null}; for tests. */
+    ParallelRunner runner() {
+        return runner;
     }
 
     /**
@@ -153,7 +179,9 @@ final class NativeEncoder implements AutoCloseable {
         try {
             Jxl.JxlEncoderDestroy(handle);
         } finally {
-            runner.close();
+            if (runner != null) {
+                runner.close();
+            }
         }
     }
 }

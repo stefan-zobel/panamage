@@ -998,7 +998,7 @@ public final class JxlDecoder {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = NativeInput.of(data, arena);
             checkFrames(input, limits, 1, false, arena);
-            try (NativeDecoder decoder = NativeDecoder.create()) {
+            try (NativeDecoder decoder = NativeDecoder.create(options.threads())) {
                 MemorySegment handle = decoder.handle();
                 NativeDecoder.check(Jxl.JxlDecoderSetUnpremultiplyAlpha(handle, Jxl.JXL_TRUE()),
                         "JxlDecoderSetUnpremultiplyAlpha");
@@ -1015,6 +1015,7 @@ public final class JxlDecoder {
                     if (status == Jxl.JXL_DEC_BASIC_INFO()) {
                         info = basicInfo(handle, arena);
                         checkImage(info, limits);
+                        decoder.fitThreads(info);
                     } else if (status == Jxl.JXL_DEC_COLOR_ENCODING()) {
                         srgb = options.srgb() && info != null && requestSrgb(handle, info, arena);
                     } else if (status == Jxl.JXL_DEC_NEED_IMAGE_OUT_BUFFER() && info != null) {
@@ -1219,7 +1220,7 @@ public final class JxlDecoder {
     private static JxlImage decode(MemorySegment input, int channels, JxlSampleType type, JxlDecodeOptions options,
             boolean keepSrgbProfile, Arena arena) {
         checkFrames(input, options.limits(), 1, false, arena);
-        try (NativeDecoder decoder = NativeDecoder.create()) {
+        try (NativeDecoder decoder = NativeDecoder.create(options.threads())) {
             // JxlImage promises straight alpha, also for images stored with premultiplied alpha.
             NativeDecoder.check(Jxl.JxlDecoderSetUnpremultiplyAlpha(decoder.handle(), Jxl.JXL_TRUE()),
                     "JxlDecoderSetUnpremultiplyAlpha");
@@ -1228,7 +1229,7 @@ public final class JxlDecoder {
             }
             decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_COLOR_ENCODING() | Jxl.JXL_DEC_FULL_IMAGE(),
                     input);
-            return run(decoder.handle(), channels, type, options, keepSrgbProfile, arena);
+            return run(decoder, channels, type, options, keepSrgbProfile, arena);
         }
     }
 
@@ -1301,8 +1302,9 @@ public final class JxlDecoder {
         return channels;
     }
 
-    private static JxlImage run(MemorySegment decoder, int channels, JxlSampleType type, JxlDecodeOptions options,
-            boolean keepSrgbProfile, Arena arena) {
+    private static JxlImage run(NativeDecoder nativeDecoder, int channels, JxlSampleType type,
+            JxlDecodeOptions options, boolean keepSrgbProfile, Arena arena) {
+        MemorySegment decoder = nativeDecoder.handle();
         MemorySegment format = pixelFormat(channels, type, arena);
         MemorySegment info = null;
         boolean srgb = false;
@@ -1314,6 +1316,7 @@ public final class JxlDecoder {
             if (status == Jxl.JXL_DEC_BASIC_INFO()) {
                 info = basicInfo(decoder, arena);
                 checkImage(info, options.limits());
+                nativeDecoder.fitThreads(info);
                 width = JxlBasicInfo.xsize(info);
                 height = JxlBasicInfo.ysize(info);
             } else if (status == Jxl.JXL_DEC_COLOR_ENCODING()) {

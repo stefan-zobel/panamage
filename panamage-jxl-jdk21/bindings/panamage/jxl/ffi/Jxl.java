@@ -3118,8 +3118,88 @@ public class Jxl  {
             throw new AssertionError("should not reach here", ex$);
         }
     }
+    public static MethodHandle JxlResizableParallelRunner$MH() {
+        return RuntimeHelper.requireNonNull(constants$49.const$1,"JxlResizableParallelRunner");
+    }
+    /**
+     * {@snippet :
+     * JxlParallelRetCode JxlResizableParallelRunner(void* runner_opaque, void* jpegxl_opaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t start_range, uint32_t end_range);
+     * }
+     */
+    public static int JxlResizableParallelRunner(MemorySegment runner_opaque, MemorySegment jpegxl_opaque, MemorySegment init, MemorySegment func, int start_range, int end_range) {
+        var mh$ = JxlResizableParallelRunner$MH();
+        try {
+            return (int)mh$.invokeExact(runner_opaque, jpegxl_opaque, init, func, start_range, end_range);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+    public static MethodHandle JxlResizableParallelRunnerCreate$MH() {
+        return RuntimeHelper.requireNonNull(constants$49.const$2,"JxlResizableParallelRunnerCreate");
+    }
+    /**
+     * {@snippet :
+     * void* JxlResizableParallelRunnerCreate(const JxlMemoryManager* memory_manager);
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunnerCreate(MemorySegment memory_manager) {
+        var mh$ = JxlResizableParallelRunnerCreate$MH();
+        try {
+            return (java.lang.foreign.MemorySegment)mh$.invokeExact(memory_manager);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+    public static MethodHandle JxlResizableParallelRunnerSetThreads$MH() {
+        return RuntimeHelper.requireNonNull(constants$49.const$3,"JxlResizableParallelRunnerSetThreads");
+    }
+    /**
+     * {@snippet :
+     * void JxlResizableParallelRunnerSetThreads(void* runner_opaque, size_t num_threads);
+     * }
+     */
+    public static void JxlResizableParallelRunnerSetThreads(MemorySegment runner_opaque, long num_threads) {
+        var mh$ = JxlResizableParallelRunnerSetThreads$MH();
+        try {
+            mh$.invokeExact(runner_opaque, num_threads);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+    public static MethodHandle JxlResizableParallelRunnerSuggestThreads$MH() {
+        return RuntimeHelper.requireNonNull(constants$49.const$5,"JxlResizableParallelRunnerSuggestThreads");
+    }
+    /**
+     * {@snippet :
+     * uint32_t JxlResizableParallelRunnerSuggestThreads(uint64_t xsize, uint64_t ysize);
+     * }
+     */
+    public static int JxlResizableParallelRunnerSuggestThreads(long xsize, long ysize) {
+        var mh$ = JxlResizableParallelRunnerSuggestThreads$MH();
+        try {
+            return (int)mh$.invokeExact(xsize, ysize);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+    public static MethodHandle JxlResizableParallelRunnerDestroy$MH() {
+        return RuntimeHelper.requireNonNull(constants$50.const$0,"JxlResizableParallelRunnerDestroy");
+    }
+    /**
+     * {@snippet :
+     * void JxlResizableParallelRunnerDestroy(void* runner_opaque);
+     * }
+     */
+    public static void JxlResizableParallelRunnerDestroy(MemorySegment runner_opaque) {
+        var mh$ = JxlResizableParallelRunnerDestroy$MH();
+        try {
+            mh$.invokeExact(runner_opaque);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
     public static MethodHandle JxlThreadParallelRunner$MH() {
-        return RuntimeHelper.requireNonNull(constants$49.const$1,"JxlThreadParallelRunner");
+        return RuntimeHelper.requireNonNull(constants$50.const$1,"JxlThreadParallelRunner");
     }
     /**
      * {@snippet :
@@ -3135,7 +3215,7 @@ public class Jxl  {
         }
     }
     public static MethodHandle JxlThreadParallelRunnerCreate$MH() {
-        return RuntimeHelper.requireNonNull(constants$49.const$2,"JxlThreadParallelRunnerCreate");
+        return RuntimeHelper.requireNonNull(constants$50.const$2,"JxlThreadParallelRunnerCreate");
     }
     /**
      * {@snippet :
@@ -3151,7 +3231,7 @@ public class Jxl  {
         }
     }
     public static MethodHandle JxlThreadParallelRunnerDestroy$MH() {
-        return RuntimeHelper.requireNonNull(constants$49.const$3,"JxlThreadParallelRunnerDestroy");
+        return RuntimeHelper.requireNonNull(constants$50.const$3,"JxlThreadParallelRunnerDestroy");
     }
     /**
      * {@snippet :
@@ -3167,7 +3247,7 @@ public class Jxl  {
         }
     }
     public static MethodHandle JxlThreadParallelRunnerDefaultNumWorkerThreads$MH() {
-        return RuntimeHelper.requireNonNull(constants$49.const$5,"JxlThreadParallelRunnerDefaultNumWorkerThreads");
+        return RuntimeHelper.requireNonNull(constants$50.const$5,"JxlThreadParallelRunnerDefaultNumWorkerThreads");
     }
     /**
      * {@snippet :

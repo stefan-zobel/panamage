@@ -8020,6 +8020,311 @@ public class Jxl extends Jxl$shared {
         }
     }
 
+    private static class JxlResizableParallelRunner {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            Jxl.C_INT,
+            Jxl.C_POINTER,
+            Jxl.C_POINTER,
+            Jxl.C_POINTER,
+            Jxl.C_POINTER,
+            Jxl.C_INT,
+            Jxl.C_INT
+        );
+
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunner");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * JxlParallelRetCode JxlResizableParallelRunner(void *runner_opaque, void *jpegxl_opaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t start_range, uint32_t end_range)
+     * }
+     */
+    public static FunctionDescriptor JxlResizableParallelRunner$descriptor() {
+        return JxlResizableParallelRunner.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * JxlParallelRetCode JxlResizableParallelRunner(void *runner_opaque, void *jpegxl_opaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t start_range, uint32_t end_range)
+     * }
+     */
+    public static MethodHandle JxlResizableParallelRunner$handle() {
+        return JxlResizableParallelRunner.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * JxlParallelRetCode JxlResizableParallelRunner(void *runner_opaque, void *jpegxl_opaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t start_range, uint32_t end_range)
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunner$address() {
+        return JxlResizableParallelRunner.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * JxlParallelRetCode JxlResizableParallelRunner(void *runner_opaque, void *jpegxl_opaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t start_range, uint32_t end_range)
+     * }
+     */
+    public static int JxlResizableParallelRunner(MemorySegment runner_opaque, MemorySegment jpegxl_opaque, MemorySegment init, MemorySegment func, int start_range, int end_range) {
+        var mh$ = JxlResizableParallelRunner.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("JxlResizableParallelRunner", runner_opaque, jpegxl_opaque, init, func, start_range, end_range);
+            }
+            return (int)mh$.invokeExact(runner_opaque, jpegxl_opaque, init, func, start_range, end_range);
+        } catch (Error | RuntimeException ex) {
+           throw ex;
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class JxlResizableParallelRunnerCreate {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            Jxl.C_POINTER,
+            Jxl.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerCreate");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void *JxlResizableParallelRunnerCreate(const JxlMemoryManager *memory_manager)
+     * }
+     */
+    public static FunctionDescriptor JxlResizableParallelRunnerCreate$descriptor() {
+        return JxlResizableParallelRunnerCreate.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void *JxlResizableParallelRunnerCreate(const JxlMemoryManager *memory_manager)
+     * }
+     */
+    public static MethodHandle JxlResizableParallelRunnerCreate$handle() {
+        return JxlResizableParallelRunnerCreate.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void *JxlResizableParallelRunnerCreate(const JxlMemoryManager *memory_manager)
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunnerCreate$address() {
+        return JxlResizableParallelRunnerCreate.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void *JxlResizableParallelRunnerCreate(const JxlMemoryManager *memory_manager)
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunnerCreate(MemorySegment memory_manager) {
+        var mh$ = JxlResizableParallelRunnerCreate.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("JxlResizableParallelRunnerCreate", memory_manager);
+            }
+            return (MemorySegment)mh$.invokeExact(memory_manager);
+        } catch (Error | RuntimeException ex) {
+           throw ex;
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class JxlResizableParallelRunnerSetThreads {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            Jxl.C_POINTER,
+            Jxl.C_LONG_LONG
+        );
+
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerSetThreads");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerSetThreads(void *runner_opaque, size_t num_threads)
+     * }
+     */
+    public static FunctionDescriptor JxlResizableParallelRunnerSetThreads$descriptor() {
+        return JxlResizableParallelRunnerSetThreads.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerSetThreads(void *runner_opaque, size_t num_threads)
+     * }
+     */
+    public static MethodHandle JxlResizableParallelRunnerSetThreads$handle() {
+        return JxlResizableParallelRunnerSetThreads.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerSetThreads(void *runner_opaque, size_t num_threads)
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunnerSetThreads$address() {
+        return JxlResizableParallelRunnerSetThreads.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerSetThreads(void *runner_opaque, size_t num_threads)
+     * }
+     */
+    public static void JxlResizableParallelRunnerSetThreads(MemorySegment runner_opaque, long num_threads) {
+        var mh$ = JxlResizableParallelRunnerSetThreads.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("JxlResizableParallelRunnerSetThreads", runner_opaque, num_threads);
+            }
+            mh$.invokeExact(runner_opaque, num_threads);
+        } catch (Error | RuntimeException ex) {
+           throw ex;
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class JxlResizableParallelRunnerSuggestThreads {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            Jxl.C_INT,
+            Jxl.C_LONG_LONG,
+            Jxl.C_LONG_LONG
+        );
+
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerSuggestThreads");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * uint32_t JxlResizableParallelRunnerSuggestThreads(uint64_t xsize, uint64_t ysize)
+     * }
+     */
+    public static FunctionDescriptor JxlResizableParallelRunnerSuggestThreads$descriptor() {
+        return JxlResizableParallelRunnerSuggestThreads.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * uint32_t JxlResizableParallelRunnerSuggestThreads(uint64_t xsize, uint64_t ysize)
+     * }
+     */
+    public static MethodHandle JxlResizableParallelRunnerSuggestThreads$handle() {
+        return JxlResizableParallelRunnerSuggestThreads.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * uint32_t JxlResizableParallelRunnerSuggestThreads(uint64_t xsize, uint64_t ysize)
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunnerSuggestThreads$address() {
+        return JxlResizableParallelRunnerSuggestThreads.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * uint32_t JxlResizableParallelRunnerSuggestThreads(uint64_t xsize, uint64_t ysize)
+     * }
+     */
+    public static int JxlResizableParallelRunnerSuggestThreads(long xsize, long ysize) {
+        var mh$ = JxlResizableParallelRunnerSuggestThreads.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("JxlResizableParallelRunnerSuggestThreads", xsize, ysize);
+            }
+            return (int)mh$.invokeExact(xsize, ysize);
+        } catch (Error | RuntimeException ex) {
+           throw ex;
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class JxlResizableParallelRunnerDestroy {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            Jxl.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = SYMBOL_LOOKUP.findOrThrow("JxlResizableParallelRunnerDestroy");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerDestroy(void *runner_opaque)
+     * }
+     */
+    public static FunctionDescriptor JxlResizableParallelRunnerDestroy$descriptor() {
+        return JxlResizableParallelRunnerDestroy.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerDestroy(void *runner_opaque)
+     * }
+     */
+    public static MethodHandle JxlResizableParallelRunnerDestroy$handle() {
+        return JxlResizableParallelRunnerDestroy.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerDestroy(void *runner_opaque)
+     * }
+     */
+    public static MemorySegment JxlResizableParallelRunnerDestroy$address() {
+        return JxlResizableParallelRunnerDestroy.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void JxlResizableParallelRunnerDestroy(void *runner_opaque)
+     * }
+     */
+    public static void JxlResizableParallelRunnerDestroy(MemorySegment runner_opaque) {
+        var mh$ = JxlResizableParallelRunnerDestroy.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("JxlResizableParallelRunnerDestroy", runner_opaque);
+            }
+            mh$.invokeExact(runner_opaque);
+        } catch (Error | RuntimeException ex) {
+           throw ex;
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class JxlThreadParallelRunner {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             Jxl.C_INT,

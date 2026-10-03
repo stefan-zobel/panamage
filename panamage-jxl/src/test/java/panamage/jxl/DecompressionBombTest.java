@@ -156,7 +156,8 @@ class DecompressionBombTest {
      * channels.
      */
     private static byte[] encode(int width, int height, int layerWidth, int layerHeight, int extraChannels) {
-        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
+        try (Arena arena = Arena.ofConfined();
+                NativeEncoder encoder = NativeEncoder.create(JxlThreads.auto())) {
             MemorySegment handle = encoder.handle();
             MemorySegment info = arena.allocate(JxlBasicInfo.layout());
             Jxl.JxlEncoderInitBasicInfo(info);

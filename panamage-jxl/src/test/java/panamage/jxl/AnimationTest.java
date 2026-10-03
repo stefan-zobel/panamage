@@ -271,7 +271,8 @@ class AnimationTest {
      * pixels with the given tick rate, loop count and layers.
      */
     private static byte[] encode(int tpsNumerator, int tpsDenominator, int loops, Layer... layers) {
-        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
+        try (Arena arena = Arena.ofConfined();
+                NativeEncoder encoder = NativeEncoder.create(JxlThreads.auto())) {
             MemorySegment handle = encoder.handle();
             MemorySegment info = arena.allocate(JxlBasicInfo.layout());
             Jxl.JxlEncoderInitBasicInfo(info);

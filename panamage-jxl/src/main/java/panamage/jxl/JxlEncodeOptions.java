@@ -1,16 +1,21 @@
 package panamage.jxl;
 
+import java.util.Objects;
+
 import panamage.jxl.ffi.Jxl;
 
 /**
  * Settings for {@link JxlEncoder} and {@link JxlFrameEncoder}.
  * {@link JxlTranscoder#fromJpeg(byte[], JxlEncodeOptions)} uses only the
- * effort, because it always transcodes without loss.
+ * effort and the threads, because it always transcodes without loss.
  * <p>
  * Use one of the factory methods and optionally adjust the effort:
  * {@snippet :
  * JxlEncodeOptions options = JxlEncodeOptions.ofQuality(90).withEffort(9);
  * }
+ * <p>
+ * {@link #withThreads(JxlThreads)} sets how many native threads libjxl uses;
+ * by default, {@link JxlThreads#auto()} chooses them by the image size.
  * <p>
  * Options are immutable; further settings may be added in later versions.
  */
@@ -31,13 +36,15 @@ public final class JxlEncodeOptions {
     /** The Butteraugli distance, 0 for lossless encoding. */
     private final float distance;
     private final int effort;
+    private final JxlThreads threads;
 
     /**
      * Creates options.
      *
      * @throws IllegalArgumentException if the effort or distance is out of range
+     * @throws NullPointerException     if {@code threads} is {@code null}
      */
-    private JxlEncodeOptions(float distance, int effort) {
+    private JxlEncodeOptions(float distance, int effort, JxlThreads threads) {
         if (effort < MIN_EFFORT || effort > MAX_EFFORT) {
             throw new IllegalArgumentException(
                     "effort must be in [" + MIN_EFFORT + ", " + MAX_EFFORT + "]: " + effort);
@@ -48,6 +55,7 @@ public final class JxlEncodeOptions {
         }
         this.distance = distance;
         this.effort = effort;
+        this.threads = Objects.requireNonNull(threads, "threads");
     }
 
     /**
@@ -65,7 +73,7 @@ public final class JxlEncodeOptions {
      * @return options for lossless encoding
      */
     public static JxlEncodeOptions ofLossless() {
-        return new JxlEncodeOptions(0.0f, DEFAULT_EFFORT);
+        return new JxlEncodeOptions(0.0f, DEFAULT_EFFORT, JxlThreads.auto());
     }
 
     /**
@@ -81,7 +89,7 @@ public final class JxlEncodeOptions {
             throw new IllegalArgumentException(
                     "distance must be in (0, " + MAX_DISTANCE + "] for lossy encoding: " + distance);
         }
-        return new JxlEncodeOptions(distance, DEFAULT_EFFORT);
+        return new JxlEncodeOptions(distance, DEFAULT_EFFORT, JxlThreads.auto());
     }
 
     /**
@@ -139,22 +147,43 @@ public final class JxlEncodeOptions {
      * @throws IllegalArgumentException if the effort is out of range
      */
     public JxlEncodeOptions withEffort(int effort) {
-        return new JxlEncodeOptions(distance, effort);
+        return new JxlEncodeOptions(distance, effort, threads);
+    }
+
+    /**
+     * Returns how many native threads libjxl uses to encode.
+     *
+     * @return the thread setting, {@link JxlThreads#auto()} by default
+     */
+    public JxlThreads threads() {
+        return threads;
+    }
+
+    /**
+     * Returns a copy of these options with a different thread setting.
+     *
+     * @param threads how many native threads libjxl uses to encode
+     * @return the new options
+     * @throws NullPointerException if {@code threads} is {@code null}
+     */
+    public JxlEncodeOptions withThreads(JxlThreads threads) {
+        return new JxlEncodeOptions(distance, effort, threads);
     }
 
     @Override
     public boolean equals(Object obj) {
         return obj instanceof JxlEncodeOptions other && Float.compare(distance, other.distance) == 0
-                && effort == other.effort;
+                && effort == other.effort && threads.equals(other.threads);
     }
 
     @Override
     public int hashCode() {
-        return 31 * Float.hashCode(distance) + effort;
+        return Objects.hash(distance, effort, threads);
     }
 
     @Override
     public String toString() {
-        return "JxlEncodeOptions[lossless=" + lossless() + ", distance=" + distance + ", effort=" + effort + "]";
+        return "JxlEncodeOptions[lossless=" + lossless() + ", distance=" + distance + ", effort=" + effort
+                + ", threads=" + threads + "]";
     }
 }

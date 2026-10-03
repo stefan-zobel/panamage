@@ -29,8 +29,8 @@ import panamage.jxl.ffi.Jxl;
  * The results are returned as byte arrays or written to an
  * {@link OutputStream} or a {@link WritableByteChannel} as they are produced.
  * <p>
- * {@code fromJpeg} takes {@link JxlEncodeOptions}, of which only the effort
- * applies. {@code toJpeg} takes {@link JxlDecodeOptions} and rejects images
+ * {@code fromJpeg} takes {@link JxlEncodeOptions}, of which the effort and
+ * the threads apply. {@code toJpeg} takes {@link JxlDecodeOptions} and rejects images
  * beyond the pixel limit or JPEG files beyond the JPEG limit of
  * {@link JxlLimits} with a {@link JxlLimitException}, like
  * {@link JxlDecoder}; the methods without options use
@@ -59,8 +59,8 @@ public final class JxlTranscoder {
      * Converts a JPEG file losslessly to JPEG XL.
      *
      * @param jpeg    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @return the JPEG XL file, including JPEG reconstruction data
      * @throws JxlException if the JPEG cannot be transcoded
      */
@@ -76,8 +76,8 @@ public final class JxlTranscoder {
      * part of the output may already have been written.
      *
      * @param jpeg    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @param out     the stream that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException  if writing to the stream fails
@@ -97,8 +97,8 @@ public final class JxlTranscoder {
      * is thrown, part of the output may already have been written.
      *
      * @param jpeg    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @param out     the channel that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
@@ -132,8 +132,8 @@ public final class JxlTranscoder {
      * to native memory first.
      *
      * @param jpeg    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @return the JPEG XL file, including JPEG reconstruction data
      * @throws JxlException if the JPEG cannot be transcoded
      */
@@ -151,8 +151,8 @@ public final class JxlTranscoder {
      * to native memory first.
      *
      * @param jpeg    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @param out     the stream that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException  if writing to the stream fails
@@ -171,8 +171,8 @@ public final class JxlTranscoder {
      * to native memory first.
      *
      * @param jpeg    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @param out     the channel that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
@@ -205,8 +205,8 @@ public final class JxlTranscoder {
      * be larger than 2 GiB.
      *
      * @param file    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @return the JPEG XL file, including JPEG reconstruction data
      * @throws IOException  if the file cannot be read
      * @throws JxlException if the JPEG cannot be transcoded
@@ -227,8 +227,8 @@ public final class JxlTranscoder {
      * be larger than 2 GiB.
      *
      * @param file    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @param out     the stream that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException  if the file cannot be read or writing to
@@ -247,8 +247,8 @@ public final class JxlTranscoder {
      * be larger than 2 GiB.
      *
      * @param file    the JPEG file
-     * @param options the encoder settings; only the effort applies, the JPEG
-     *                is always transcoded without loss
+     * @param options the encoder settings; the effort and the threads apply,
+     *                the JPEG is always transcoded without loss
      * @param out     the channel that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException              if the file cannot be read or writing to
@@ -281,8 +281,8 @@ public final class JxlTranscoder {
      *
      * @param jxl     the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @return the original JPEG file
      * @throws JxlLimitException if the image or the JPEG file exceeds the
      *                           limits
@@ -304,8 +304,8 @@ public final class JxlTranscoder {
      *
      * @param jxl     the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @param out     the stream that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException       if writing to the stream fails
@@ -332,8 +332,8 @@ public final class JxlTranscoder {
      *
      * @param jxl     the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @param out     the channel that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
@@ -375,8 +375,8 @@ public final class JxlTranscoder {
      *
      * @param jxl     the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @return the original JPEG file
      * @throws JxlLimitException if the image or the JPEG file exceeds the
      *                           limits
@@ -398,8 +398,8 @@ public final class JxlTranscoder {
      *
      * @param jxl     the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @param out     the stream that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException       if writing to the stream fails
@@ -422,8 +422,8 @@ public final class JxlTranscoder {
      *
      * @param jxl     the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @param out     the channel that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
@@ -463,8 +463,8 @@ public final class JxlTranscoder {
      *
      * @param file    the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @return the original JPEG file
      * @throws IOException       if the file cannot be read
      * @throws JxlLimitException if the image or the JPEG file exceeds the
@@ -477,7 +477,7 @@ public final class JxlTranscoder {
         Objects.requireNonNull(options, "options");
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment input = NativeInput.read(file, arena);
-            return OutputSink.toBytes(sink -> restore(input, OUTPUT_CHUNK_SIZE, options.limits(), sink));
+            return OutputSink.toBytes(sink -> restore(input, OUTPUT_CHUNK_SIZE, options, sink));
         }
     }
 
@@ -489,8 +489,8 @@ public final class JxlTranscoder {
      *
      * @param file    the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @param out     the stream that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException       if the file cannot be read or writing to
@@ -513,8 +513,8 @@ public final class JxlTranscoder {
      *
      * @param file    the JPEG XL file
      * @param options the limits ({@link JxlLimits#maxPixels()} and
-     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
-     *                setting has no effect
+     *                {@link JxlLimits#maxJpegBytes()} apply) and the threads;
+     *                the color space setting has no effect
      * @param out     the channel that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException              if the file cannot be read or writing to
@@ -563,7 +563,9 @@ public final class JxlTranscoder {
     /** Transcodes a JPEG file in native memory to a sink. */
     private static long transcode(MemorySegment jpeg, JxlEncodeOptions options, OutputSink sink, int chunkSize)
             throws IOException {
-        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
+        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create(options.threads())) {
+            // libjxl reads the size of the JPEG only when it encodes it.
+            encoder.fitThreadsToUnknownSize();
             MemorySegment handle = encoder.handle();
             // The reconstruction data is stored in a box, which requires the container format.
             encoder.check(Jxl.JxlEncoderUseContainer(handle, Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
@@ -594,7 +596,7 @@ public final class JxlTranscoder {
         Objects.requireNonNull(jxl, "jxl");
         Objects.requireNonNull(options, "options");
         try (Arena arena = Arena.ofConfined()) {
-            return restore(NativeInput.of(jxl, arena), chunkSize, options.limits(), sink);
+            return restore(NativeInput.of(jxl, arena), chunkSize, options, sink);
         }
     }
 
@@ -602,33 +604,40 @@ public final class JxlTranscoder {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(options, "options");
         try (Arena arena = Arena.ofConfined()) {
-            return restore(NativeInput.read(file, arena), OUTPUT_CHUNK_SIZE, options.limits(), sink);
+            return restore(NativeInput.read(file, arena), OUTPUT_CHUNK_SIZE, options, sink);
         }
     }
 
     /** Restores the JPEG file from a JPEG XL file in native memory. */
-    private static long restore(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink)
+    private static long restore(MemorySegment input, int chunkSize, JxlDecodeOptions options, OutputSink sink)
             throws IOException {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
         try (Arena arena = Arena.ofConfined()) {
-            JxlDecoder.checkFrames(input, limits, 1, false, arena);
+            JxlDecoder.checkFrames(input, options.limits(), 1, false, arena);
         }
-        return reconstruct(input, chunkSize, limits, sink);
+        return reconstruct(input, chunkSize, options, sink);
     }
 
-    private static long reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink)
+    private static long reconstruct(MemorySegment input, int chunkSize, JxlDecodeOptions options, OutputSink sink)
             throws IOException {
+        JxlLimits limits = options.limits();
         // The buffer is released after the decoder, which may still refer to it.
-        try (NativeBuffer chunk = new NativeBuffer(chunkSize); NativeDecoder decoder = NativeDecoder.create()) {
+        try (NativeBuffer chunk = new NativeBuffer(chunkSize);
+                NativeDecoder decoder = NativeDecoder.create(options.threads())) {
             MemorySegment handle = decoder.handle();
-            decoder.start(Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(), input);
+            decoder.start(Jxl.JXL_DEC_BASIC_INFO() | Jxl.JXL_DEC_JPEG_RECONSTRUCTION() | Jxl.JXL_DEC_FULL_IMAGE(),
+                    input);
 
             boolean reconstructing = false;
             while (true) {
                 int status = Jxl.JxlDecoderProcessInput(handle);
-                if (status == Jxl.JXL_DEC_JPEG_RECONSTRUCTION()) {
+                if (status == Jxl.JXL_DEC_BASIC_INFO()) {
+                    try (Arena arena = Arena.ofConfined()) {
+                        decoder.fitThreads(JxlDecoder.basicInfo(handle, arena));
+                    }
+                } else if (status == Jxl.JXL_DEC_JPEG_RECONSTRUCTION()) {
                     reconstructing = true;
                     NativeDecoder.check(Jxl.JxlDecoderSetJPEGBuffer(handle, chunk.segment(),
                             chunk.segment().byteSize()), "JxlDecoderSetJPEGBuffer");
