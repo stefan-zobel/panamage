@@ -564,8 +564,13 @@ public final class JxlTranscoder {
     private static long transcode(MemorySegment jpeg, JxlEncodeOptions options, OutputSink sink, int chunkSize)
             throws IOException {
         try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create(options.threads())) {
-            // libjxl reads the size of the JPEG only when it encodes it.
-            encoder.fitThreadsToUnknownSize();
+            // libjxl reads the JPEG only when it encodes it, so the size comes from the frame header.
+            long[] size = JpegSize.of(jpeg);
+            if (size != null) {
+                encoder.fitThreads(size[0], size[1]);
+            } else {
+                encoder.fitThreadsToUnknownSize();
+            }
             MemorySegment handle = encoder.handle();
             // The reconstruction data is stored in a box, which requires the container format.
             encoder.check(Jxl.JxlEncoderUseContainer(handle, Jxl.JXL_TRUE()), "JxlEncoderUseContainer");

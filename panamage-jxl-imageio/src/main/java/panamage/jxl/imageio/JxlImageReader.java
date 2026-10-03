@@ -28,6 +28,7 @@ import panamage.jxl.JxlImageInfo;
 import panamage.jxl.JxlLimits;
 import panamage.jxl.JxlMetadata;
 import panamage.jxl.JxlSampleType;
+import panamage.jxl.JxlThreads;
 
 /**
  * Reads JPEG XL images with libjxl.
@@ -83,6 +84,11 @@ import panamage.jxl.JxlSampleType;
  * ((JxlImageReader) reader).setLimits(JxlLimits.defaults().withMaxPixels(50_000_000));
  * }
  * <p>
+ * libjxl decodes with as many native threads as the image size suggests
+ * ({@link JxlThreads#auto()}); {@link #setThreads(JxlThreads)} changes that
+ * per reader, for example to {@link JxlThreads#none()} in a server that reads
+ * many images in parallel.
+ * <p>
  * The encoded input is read once and kept in native memory until the next
  * input, {@link #reset()} or {@link #dispose()}.
  */
@@ -90,6 +96,7 @@ public final class JxlImageReader extends ImageReader {
 
     private JxlLimits limits = JxlLimits.defaults();
     private boolean convertToSrgb = true;
+    private JxlThreads threads = JxlThreads.auto();
     /** The encoded input in native memory, read once per input. */
     private EncodedInput input;
     private JxlImageInfo info;
@@ -103,6 +110,7 @@ public final class JxlImageReader extends ImageReader {
     private JxlFrameDecoder frames;
     private JxlSampleType framesType;
     private JxlLimits framesLimits;
+    private JxlThreads framesThreads;
     private boolean framesSrgb;
 
     /** The sample type and color space of the decoded pixels. */
@@ -167,6 +175,25 @@ public final class JxlImageReader extends ImageReader {
      */
     public boolean isConvertToSrgb() {
         return convertToSrgb;
+    }
+
+    /**
+     * Sets how many native threads libjxl uses to decode images. The setting
+     * stays in effect for later inputs, until {@link #reset()}.
+     *
+     * @param threads the thread setting; {@link JxlThreads#auto()} by default
+     */
+    public void setThreads(JxlThreads threads) {
+        this.threads = Objects.requireNonNull(threads, "threads");
+    }
+
+    /**
+     * Returns how many native threads libjxl uses to decode images.
+     *
+     * @return the current thread setting
+     */
+    public JxlThreads getThreads() {
+        return threads;
     }
 
     @Override
@@ -338,12 +365,13 @@ public final class JxlImageReader extends ImageReader {
      */
     private JxlImage readFrame(int index, int channels, Target target) throws IOException {
         if (frames == null || framesType != target.type() || framesSrgb != target.srgb()
-                || !framesLimits.equals(limits) || frames.nextIndex() > index) {
+                || !framesLimits.equals(limits) || !framesThreads.equals(threads) || frames.nextIndex() > index) {
             closeFrames();
             frames = input().openFrames(channels, target.type(), decodeOptions(target));
             framesType = target.type();
             framesSrgb = target.srgb();
             framesLimits = limits;
+            framesThreads = threads;
         }
         frames.skip(index - frames.nextIndex());
         JxlFrame frame = frames.next();
@@ -354,15 +382,16 @@ public final class JxlImageReader extends ImageReader {
     }
 
     private JxlDecodeOptions decodeOptions(Target target) {
-        return JxlDecodeOptions.defaults().withLimits(limits).withSrgb(target.srgb());
+        return JxlDecodeOptions.defaults().withLimits(limits).withSrgb(target.srgb()).withThreads(threads);
     }
 
-    /** Also restores the default limits and the conversion to sRGB. */
+    /** Also restores the default limits, the conversion to sRGB and the thread setting. */
     @Override
     public void reset() {
         super.reset();
         limits = JxlLimits.defaults();
         convertToSrgb = true;
+        threads = JxlThreads.auto();
         clear();
     }
 

@@ -38,9 +38,9 @@ public final class JxlThreads {
     /**
      * Returns the default setting: as many threads as the size of the image
      * suggests, none for an image of at most one group (256 x 256 pixels) and
-     * at most one per processor. Where the size is not known in advance, as
-     * in {@link JxlTranscoder#fromJpeg(byte[])}, one thread per processor is
-     * used.
+     * at most one per processor. Where the size cannot be read in advance
+     * (a JPEG file for {@link JxlTranscoder#fromJpeg(byte[])} without a
+     * regular frame header), one thread per processor is used.
      *
      * @return the automatic setting
      */

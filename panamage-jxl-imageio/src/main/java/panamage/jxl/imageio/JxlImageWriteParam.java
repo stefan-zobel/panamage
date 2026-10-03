@@ -1,10 +1,12 @@
 package panamage.jxl.imageio;
 
 import java.util.Locale;
+import java.util.Objects;
 
 import javax.imageio.ImageWriteParam;
 
 import panamage.jxl.JxlEncodeOptions;
+import panamage.jxl.JxlThreads;
 
 /**
  * Settings for {@link JxlImageWriter}.
@@ -12,9 +14,10 @@ import panamage.jxl.JxlEncodeOptions;
  * With {@link #MODE_EXPLICIT}, the compression type {@value #LOSSY} maps the
  * compression quality from 0 to 1 onto the JPEG XL quality scale from 0 to 100
  * (1.0 is lossless), and {@value #LOSSLESS} encodes bit-exact. In every mode,
- * {@link #setEffort(int)} trades encoding speed for file size. Without
- * explicit settings, images are encoded lossy at distance 1.0 (visually
- * lossless).
+ * {@link #setEffort(int)} trades encoding speed for file size, and
+ * {@link #setThreads(JxlThreads)} sets how many native threads libjxl uses
+ * (by default as many as the image size suggests). Without explicit settings,
+ * images are encoded lossy at distance 1.0 (visually lossless).
  * {@snippet :
  * JxlImageWriteParam param = (JxlImageWriteParam) writer.getDefaultWriteParam();
  * param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
@@ -34,6 +37,7 @@ public class JxlImageWriteParam extends ImageWriteParam {
     private static final float DEFAULT_QUALITY = 0.9f;
 
     private int effort = JxlEncodeOptions.DEFAULT_EFFORT;
+    private JxlThreads threads = JxlThreads.auto();
 
     /**
      * Creates the default settings.
@@ -84,6 +88,24 @@ public class JxlImageWriteParam extends ImageWriteParam {
         return effort;
     }
 
+    /**
+     * Sets how many native threads libjxl uses to encode.
+     *
+     * @param threads the thread setting; {@link JxlThreads#auto()} by default
+     */
+    public void setThreads(JxlThreads threads) {
+        this.threads = Objects.requireNonNull(threads, "threads");
+    }
+
+    /**
+     * Returns how many native threads libjxl uses to encode.
+     *
+     * @return the thread setting
+     */
+    public JxlThreads getThreads() {
+        return threads;
+    }
+
     @Override
     public boolean isCompressionLossless() {
         // Validates the mode and type as specified by ImageWriteParam.
@@ -96,6 +118,13 @@ public class JxlImageWriteParam extends ImageWriteParam {
      * of other writers, to encoder options.
      */
     static JxlEncodeOptions toOptions(ImageWriteParam param) {
+        JxlThreads threads = param instanceof JxlImageWriteParam jxlParam ? jxlParam.getThreads()
+                : JxlThreads.auto();
+        return compression(param).withThreads(threads);
+    }
+
+    /** Converts the compression settings and the effort. */
+    private static JxlEncodeOptions compression(ImageWriteParam param) {
         if (param == null) {
             return JxlEncodeOptions.defaults();
         }

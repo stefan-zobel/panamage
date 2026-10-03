@@ -23,7 +23,9 @@ import javax.imageio.stream.ImageOutputStream;
 import org.junit.jupiter.api.Test;
 
 import panamage.jxl.JxlDecoder;
+import panamage.jxl.JxlEncodeOptions;
 import panamage.jxl.JxlImageInfo;
+import panamage.jxl.JxlThreads;
 
 class JxlImageWriterTest {
 
@@ -145,6 +147,28 @@ class JxlImageWriterTest {
         assertEquals(12, decoded.getHeight());
         assertEquals(source.getRGB(8, 4), decoded.getRGB(0, 0));
         assertEquals(source.getRGB(23, 15), decoded.getRGB(15, 11));
+    }
+
+    @Test
+    void writesTheSameFileWithEveryThreadSetting() throws IOException {
+        BufferedImage source = gradient(BufferedImage.TYPE_INT_ARGB);
+        byte[] expected = write(source, lossless());
+
+        JxlImageWriteParam param = lossless();
+        assertEquals(JxlThreads.auto(), param.getThreads());
+        for (JxlThreads threads : new JxlThreads[] {JxlThreads.none(), JxlThreads.fixed(2)}) {
+            param.setThreads(threads);
+            assertEquals(threads, JxlImageWriteParam.toOptions(param).threads());
+            assertArrayEquals(expected, write(source, param), threads.toString());
+        }
+        assertThrows(NullPointerException.class, () -> param.setThreads(null));
+    }
+
+    @Test
+    void otherParametersUseAutomaticThreads() {
+        assertEquals(JxlThreads.auto(), JxlImageWriteParam.toOptions(null).threads());
+        assertEquals(JxlEncodeOptions.defaults(), JxlImageWriteParam.toOptions(null));
+        assertEquals(JxlThreads.auto(), JxlImageWriteParam.toOptions(new ImageWriteParam(null)).threads());
     }
 
     /** A 64x48 image with the pixels of gradient.rgba (alpha dropped for opaque types). */

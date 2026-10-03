@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,6 +44,7 @@ import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlLimitException;
 import panamage.jxl.JxlLimits;
+import panamage.jxl.JxlThreads;
 
 class JxlImageReaderTest {
 
@@ -212,6 +214,36 @@ class JxlImageReaderTest {
         reader.reset();
         assertEquals(JxlLimits.defaults(), reader.getLimits());
         assertThrows(NullPointerException.class, () -> reader.setLimits(null));
+    }
+
+    @Test
+    void keepsTheThreadsForNewInputUntilReset() throws IOException {
+        JxlImageReader reader = reader(Resources.bytes("gradient.jxl"));
+        assertEquals(JxlThreads.auto(), reader.getThreads());
+        reader.setThreads(JxlThreads.none());
+
+        reader.setInput(stream(Resources.bytes("photo-420-exif.jxl")));
+        assertEquals(JxlThreads.none(), reader.getThreads());
+
+        reader.reset();
+        assertEquals(JxlThreads.auto(), reader.getThreads());
+        assertThrows(NullPointerException.class, () -> reader.setThreads(null));
+    }
+
+    @Test
+    void readsTheSamePixelsWithEveryThreadSetting() throws IOException {
+        int[] expected = argb(read(Resources.bytes("photo-420-exif.jxl")));
+        JxlImageReader animation = reader(Resources.bytes("animation.jxl"));
+        for (JxlThreads threads : List.of(JxlThreads.none(), JxlThreads.fixed(2), JxlThreads.auto())) {
+            JxlImageReader reader = reader(Resources.bytes("photo-420-exif.jxl"));
+            reader.setThreads(threads);
+            assertArrayEquals(expected, argb(reader.read(0)), threads.toString());
+
+            // A new setting between two frames reopens the frame decoder at the right frame.
+            assertArrayEquals(Resources.animationArgb(0), argb(animation.read(0)), threads.toString());
+            animation.setThreads(threads);
+            assertArrayEquals(Resources.animationArgb(1), argb(animation.read(1)), threads.toString());
+        }
     }
 
     @Test
