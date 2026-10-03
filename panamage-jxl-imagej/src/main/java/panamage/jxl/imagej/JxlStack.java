@@ -12,6 +12,7 @@ import panamage.jxl.JxlAnimationHeader;
 import panamage.jxl.JxlBox;
 import panamage.jxl.JxlChannels;
 import panamage.jxl.JxlChannelsFrame;
+import panamage.jxl.JxlDecodeOptions;
 import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlEncodeOptions;
 import panamage.jxl.JxlEncoder;
@@ -63,9 +64,10 @@ record JxlStack(List<JxlChannels> positions, StackMetadata metadata) {
      */
     static JxlStack read(byte[] data, JxlLimits limits) {
         JxlSampleType type = ChannelLayout.losslessType(data);
+        JxlDecodeOptions options = JxlDecodeOptions.defaults().withLimits(limits);
         List<JxlChannels> positions = new ArrayList<>();
         List<Double> durations = new ArrayList<>();
-        try (JxlFrameDecoder frames = JxlFrameDecoder.openChannels(data, type, limits)) {
+        try (JxlFrameDecoder frames = JxlFrameDecoder.openChannels(data, type, options)) {
             for (JxlChannelsFrame frame = frames.nextChannels(); frame != null; frame = frames.nextChannels()) {
                 positions.add(frame.channels());
                 durations.add(frame.info().durationMillis());
@@ -75,7 +77,7 @@ record JxlStack(List<JxlChannels> positions, StackMetadata metadata) {
             throw new IllegalArgumentException("The file has no frames");
         }
         JxlChannels first = positions.get(0);
-        StackMetadata metadata = boxMetadata(JxlDecoder.readMetadata(data, limits), first, positions.size());
+        StackMetadata metadata = boxMetadata(JxlDecoder.readMetadata(data, options), first, positions.size());
         if (metadata == null) {
             boolean rgb = ChannelLayout.isRgb(first);
             metadata = StackMetadata.of(rgb ? 1 : first.channels(), 1, positions.size(), rgb);

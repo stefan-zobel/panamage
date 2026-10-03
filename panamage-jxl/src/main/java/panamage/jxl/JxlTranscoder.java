@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.channels.WritableByteChannel;
+import java.nio.file.Path;
 import java.util.Objects;
 
 import panamage.jxl.ffi.Jxl;
@@ -22,13 +23,18 @@ import panamage.jxl.ffi.Jxl;
  * The result of {@code fromJpeg} is a regular JPEG XL image that
  * {@link JxlDecoder} decodes to pixels as well.
  * <p>
+ * Both directions take the input as a byte array, as a {@link MemorySegment}
+ * (for example a mapped file, passed to libjxl without a copy) or as a file
+ * {@link Path} (read into native memory), with the same parameters otherwise.
  * The results are returned as byte arrays or written to an
  * {@link OutputStream} or a {@link WritableByteChannel} as they are produced.
- * {@code toJpeg} also reads the JPEG XL file from a {@link MemorySegment},
- * such as a mapped file, which may be larger than 2 GiB.
  * <p>
- * {@code toJpeg} rejects images beyond the pixel limit of {@link JxlLimits}
- * with a {@link JxlLimitException}, like {@link JxlDecoder}.
+ * {@code fromJpeg} takes {@link JxlEncodeOptions}, of which only the effort
+ * applies. {@code toJpeg} takes {@link JxlDecodeOptions} and rejects images
+ * beyond the pixel limit or JPEG files beyond the JPEG limit of
+ * {@link JxlLimits} with a {@link JxlLimitException}, like
+ * {@link JxlDecoder}; the methods without options use
+ * {@link JxlDecodeOptions#defaults()}.
  */
 public final class JxlTranscoder {
 
@@ -46,20 +52,20 @@ public final class JxlTranscoder {
      * @throws JxlException if the JPEG cannot be transcoded
      */
     public static byte[] fromJpeg(byte[] jpeg) {
-        return fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT);
+        return fromJpeg(jpeg, JxlEncodeOptions.ofLossless());
     }
 
     /**
      * Converts a JPEG file losslessly to JPEG XL.
      *
-     * @param jpeg   the JPEG file
-     * @param effort the encoder effort from 1 (fastest) to 10 (smallest output)
+     * @param jpeg    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
      * @return the JPEG XL file, including JPEG reconstruction data
-     * @throws IllegalArgumentException if the effort is out of range
-     * @throws JxlException             if the JPEG cannot be transcoded
+     * @throws JxlException if the JPEG cannot be transcoded
      */
-    public static byte[] fromJpeg(byte[] jpeg, int effort) {
-        return fromJpeg(jpeg, effort, NativeEncoder.OUTPUT_CHUNK_SIZE);
+    public static byte[] fromJpeg(byte[] jpeg, JxlEncodeOptions options) {
+        return fromJpeg(jpeg, options, NativeEncoder.OUTPUT_CHUNK_SIZE);
     }
 
     /**
@@ -69,17 +75,17 @@ public final class JxlTranscoder {
      * The stream is neither flushed nor closed. If an exception is thrown,
      * part of the output may already have been written.
      *
-     * @param jpeg   the JPEG file
-     * @param effort the encoder effort from 1 (fastest) to 10 (smallest output)
-     * @param out    the stream that receives the JPEG XL file
+     * @param jpeg    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @param out     the stream that receives the JPEG XL file
      * @return the number of bytes written
-     * @throws IOException              if writing to the stream fails
-     * @throws IllegalArgumentException if the effort is out of range
-     * @throws JxlException             if the JPEG cannot be transcoded
-     * @see #fromJpeg(byte[], int)
+     * @throws IOException  if writing to the stream fails
+     * @throws JxlException if the JPEG cannot be transcoded
      */
-    public static long fromJpeg(byte[] jpeg, int effort, OutputStream out) throws IOException {
-        return fromJpeg(jpeg, effort, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
+    public static long fromJpeg(byte[] jpeg, JxlEncodeOptions options, OutputStream out)
+            throws IOException {
+        return fromJpeg(jpeg, options, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
     }
 
     /**
@@ -90,50 +96,176 @@ public final class JxlTranscoder {
      * The channel must be in blocking mode; it is not closed. If an exception
      * is thrown, part of the output may already have been written.
      *
-     * @param jpeg   the JPEG file
-     * @param effort the encoder effort from 1 (fastest) to 10 (smallest output)
-     * @param out    the channel that receives the JPEG XL file
+     * @param jpeg    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @param out     the channel that receives the JPEG XL file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
-     * @throws IllegalArgumentException if the effort is out of range or the
-     *                                  channel is in non-blocking mode
+     * @throws IllegalArgumentException if the channel is in non-blocking mode
      * @throws JxlException             if the JPEG cannot be transcoded
-     * @see #fromJpeg(byte[], int)
      */
-    public static long fromJpeg(byte[] jpeg, int effort, WritableByteChannel out) throws IOException {
-        return fromJpeg(jpeg, effort, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
+    public static long fromJpeg(byte[] jpeg, JxlEncodeOptions options, WritableByteChannel out)
+            throws IOException {
+        return fromJpeg(jpeg, options, OutputSink.of(out), NativeEncoder.OUTPUT_CHUNK_SIZE);
     }
 
-    /** Like {@link #fromJpeg(byte[], int)}, with a given output buffer size. */
-    static byte[] fromJpeg(byte[] jpeg, int effort, int chunkSize) {
-        return OutputSink.toBytes(sink -> fromJpeg(jpeg, effort, sink, chunkSize));
+    /**
+     * Like {@link #fromJpeg(byte[])}, reading the JPEG from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jpeg the JPEG file
+     * @return the JPEG XL file, including JPEG reconstruction data
+     * @throws JxlException if the JPEG cannot be transcoded
+     */
+    public static byte[] fromJpeg(MemorySegment jpeg) {
+        return fromJpeg(jpeg, JxlEncodeOptions.ofLossless());
     }
 
-    /** Transcodes to a sink, with a given output buffer size. */
-    static long fromJpeg(byte[] jpeg, int effort, OutputSink sink, int chunkSize) throws IOException {
+    /**
+     * Like {@link #fromJpeg(byte[], JxlEncodeOptions)}, reading the JPEG
+     * from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jpeg    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @return the JPEG XL file, including JPEG reconstruction data
+     * @throws JxlException if the JPEG cannot be transcoded
+     */
+    public static byte[] fromJpeg(MemorySegment jpeg, JxlEncodeOptions options) {
         Objects.requireNonNull(jpeg, "jpeg");
-        if (effort < JxlEncodeOptions.MIN_EFFORT || effort > JxlEncodeOptions.MAX_EFFORT) {
-            throw new IllegalArgumentException("effort must be in [" + JxlEncodeOptions.MIN_EFFORT + ", "
-                    + JxlEncodeOptions.MAX_EFFORT + "]: " + effort);
+        Objects.requireNonNull(options, "options");
+        return OutputSink.toBytes(sink -> fromJpeg(jpeg, options, sink));
+    }
+
+    /**
+     * Like {@link #fromJpeg(byte[], JxlEncodeOptions, OutputStream)}, reading
+     * the JPEG from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jpeg    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @param out     the stream that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException  if writing to the stream fails
+     * @throws JxlException if the JPEG cannot be transcoded
+     */
+    public static long fromJpeg(MemorySegment jpeg, JxlEncodeOptions options, OutputStream out)
+            throws IOException {
+        return fromJpeg(jpeg, options, OutputSink.of(out));
+    }
+
+    /**
+     * Like {@link #fromJpeg(byte[], JxlEncodeOptions, WritableByteChannel)},
+     * reading the JPEG from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jpeg    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @param out     the channel that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException              if writing to the channel fails
+     * @throws IllegalArgumentException if the channel is in non-blocking mode
+     * @throws JxlException             if the JPEG cannot be transcoded
+     */
+    public static long fromJpeg(MemorySegment jpeg, JxlEncodeOptions options, WritableByteChannel out)
+            throws IOException {
+        return fromJpeg(jpeg, options, OutputSink.of(out));
+    }
+
+    /**
+     * Like {@link #fromJpeg(byte[])}, reading the JPEG from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file the JPEG file
+     * @return the JPEG XL file, including JPEG reconstruction data
+     * @throws IOException  if the file cannot be read
+     * @throws JxlException if the JPEG cannot be transcoded
+     */
+    public static byte[] fromJpeg(Path file) throws IOException {
+        return fromJpeg(file, JxlEncodeOptions.ofLossless());
+    }
+
+    /**
+     * Like {@link #fromJpeg(byte[], JxlEncodeOptions)}, reading the JPEG
+     * from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @return the JPEG XL file, including JPEG reconstruction data
+     * @throws IOException  if the file cannot be read
+     * @throws JxlException if the JPEG cannot be transcoded
+     */
+    public static byte[] fromJpeg(Path file, JxlEncodeOptions options) throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment input = NativeInput.read(file, arena);
+            return OutputSink.toBytes(sink -> transcode(input, options, sink, NativeEncoder.OUTPUT_CHUNK_SIZE));
         }
-        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
-            MemorySegment handle = encoder.handle();
-            // The reconstruction data is stored in a box, which requires the container format.
-            encoder.check(Jxl.JxlEncoderUseContainer(handle, Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
-            encoder.check(Jxl.JxlEncoderStoreJPEGMetadata(handle, Jxl.JXL_TRUE()), "JxlEncoderStoreJPEGMetadata");
-            MemorySegment settings = encoder.createFrameSettings(effort);
-            MemorySegment input = arena.allocateFrom(JAVA_BYTE, jpeg);
-            encoder.check(Jxl.JxlEncoderAddJPEGFrame(settings, input, input.byteSize()), "JxlEncoderAddJPEGFrame");
-            Jxl.JxlEncoderCloseInput(handle);
-            return encoder.writeOutput(arena, sink, chunkSize);
-        }
+    }
+
+    /**
+     * Like {@link #fromJpeg(byte[], JxlEncodeOptions, OutputStream)}, reading
+     * the JPEG from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @param out     the stream that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException  if the file cannot be read or writing to
+     *                      the stream fails
+     * @throws JxlException if the JPEG cannot be transcoded
+     */
+    public static long fromJpeg(Path file, JxlEncodeOptions options, OutputStream out)
+            throws IOException {
+        return fromJpeg(file, options, OutputSink.of(out));
+    }
+
+    /**
+     * Like {@link #fromJpeg(byte[], JxlEncodeOptions, WritableByteChannel)},
+     * reading the JPEG from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG file
+     * @param options the encoder settings; only the effort applies, the JPEG
+     *                is always transcoded without loss
+     * @param out     the channel that receives the JPEG XL file
+     * @return the number of bytes written
+     * @throws IOException              if the file cannot be read or writing to
+     *                                  the channel fails
+     * @throws IllegalArgumentException if the channel is in non-blocking mode
+     * @throws JxlException             if the JPEG cannot be transcoded
+     */
+    public static long fromJpeg(Path file, JxlEncodeOptions options, WritableByteChannel out)
+            throws IOException {
+        return fromJpeg(file, options, OutputSink.of(out));
     }
 
     /**
      * Restores the original JPEG file from a JPEG XL file that was created by
      * lossless JPEG transcoding.
      *
-     * @param jxl the JPEG XL file
+     * @param jxl  the JPEG XL file
      * @return the original JPEG file
      * @throws JxlLimitException if the image or the JPEG file exceeds the
      *                           default limits
@@ -141,23 +273,24 @@ public final class JxlTranscoder {
      *                           no JPEG reconstruction data
      */
     public static byte[] toJpeg(byte[] jxl) {
-        return toJpeg(jxl, JxlLimits.defaults());
+        return toJpeg(jxl, JxlDecodeOptions.defaults());
     }
 
     /**
-     * Like {@link #toJpeg(byte[])}, with the given limits.
+     * Like {@link #toJpeg(byte[])}, with the given options.
      *
-     * @param jxl    the JPEG XL file
-     * @param limits the limits; {@link JxlLimits#maxPixels()} and
-     *               {@link JxlLimits#maxJpegBytes()} apply
+     * @param jxl     the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
      * @return the original JPEG file
      * @throws JxlLimitException if the image or the JPEG file exceeds the
      *                           limits
      * @throws JxlException      if the data is not valid JPEG XL or contains
      *                           no JPEG reconstruction data
      */
-    public static byte[] toJpeg(byte[] jxl, JxlLimits limits) {
-        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits);
+    public static byte[] toJpeg(byte[] jxl, JxlDecodeOptions options) {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, options);
     }
 
     /**
@@ -169,20 +302,21 @@ public final class JxlTranscoder {
      * the pixel limit before anything is written; if an exception is thrown
      * later, part of the JPEG file may already have been written.
      *
-     * @param jxl    the JPEG XL file
-     * @param limits the limits; {@link JxlLimits#maxPixels()} and
-     *               {@link JxlLimits#maxJpegBytes()} apply
-     * @param out    the stream that receives the JPEG file
+     * @param jxl     the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @param out     the stream that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException       if writing to the stream fails
-     * @throws JxlLimitException if the image or the JPEG file exceeds the
-     *                           limits
-     * @throws JxlException      if the data is not valid JPEG XL or contains
-     *                           no JPEG reconstruction data
-     * @see #toJpeg(byte[], JxlLimits)
+     * @throws JxlLimitException if the image or the JPEG file exceeds
+     *                           the limits
+     * @throws JxlException      if the data is not valid JPEG XL or
+     *                           contains no JPEG reconstruction data
      */
-    public static long toJpeg(byte[] jxl, JxlLimits limits, OutputStream out) throws IOException {
-        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    public static long toJpeg(byte[] jxl, JxlDecodeOptions options, OutputStream out)
+            throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, options, OutputSink.of(out));
     }
 
     /**
@@ -196,10 +330,11 @@ public final class JxlTranscoder {
      * exception is thrown later, part of the JPEG file may already have been
      * written.
      *
-     * @param jxl    the JPEG XL file
-     * @param limits the limits; {@link JxlLimits#maxPixels()} and
-     *               {@link JxlLimits#maxJpegBytes()} apply
-     * @param out    the channel that receives the JPEG file
+     * @param jxl     the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @param out     the channel that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
      * @throws IllegalArgumentException if the channel is in non-blocking mode
@@ -207,45 +342,89 @@ public final class JxlTranscoder {
      *                                  the limits
      * @throws JxlException             if the data is not valid JPEG XL or
      *                                  contains no JPEG reconstruction data
-     * @see #toJpeg(byte[], JxlLimits)
      */
-    public static long toJpeg(byte[] jxl, JxlLimits limits, WritableByteChannel out) throws IOException {
-        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    public static long toJpeg(byte[] jxl, JxlDecodeOptions options, WritableByteChannel out)
+            throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, options, OutputSink.of(out));
     }
 
     /**
-     * Like {@link #toJpeg(byte[], JxlLimits, OutputStream)}, reading the JPEG
-     * XL file from a memory segment.
+     * Like {@link #toJpeg(byte[])}, reading the JPEG XL image from a memory
+     * segment.
      * A native segment, such as a mapped file, is passed to libjxl without
      * copying and must not change during the call; a heap segment is copied
      * to native memory first.
      *
-     * @param jxl    the JPEG XL file
-     * @param limits the limits; {@link JxlLimits#maxPixels()} and
-     *               {@link JxlLimits#maxJpegBytes()} apply
-     * @param out    the stream that receives the JPEG file
-     * @return the number of bytes written
-     * @throws IOException       if writing to the stream fails
+     * @param jxl  the JPEG XL file
+     * @return the original JPEG file
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           default limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
+     */
+    public static byte[] toJpeg(MemorySegment jxl) {
+        return toJpeg(jxl, JxlDecodeOptions.defaults());
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions)}, reading the JPEG XL image
+     * from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jxl     the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @return the original JPEG file
      * @throws JxlLimitException if the image or the JPEG file exceeds the
      *                           limits
      * @throws JxlException      if the data is not valid JPEG XL or contains
      *                           no JPEG reconstruction data
      */
-    public static long toJpeg(MemorySegment jxl, JxlLimits limits, OutputStream out) throws IOException {
-        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    public static byte[] toJpeg(MemorySegment jxl, JxlDecodeOptions options) {
+        Objects.requireNonNull(jxl, "jxl");
+        Objects.requireNonNull(options, "options");
+        return OutputSink.toBytes(sink -> toJpeg(jxl, OUTPUT_CHUNK_SIZE, options, sink));
     }
 
     /**
-     * Like {@link #toJpeg(byte[], JxlLimits, WritableByteChannel)}, reading
-     * the JPEG XL file from a memory segment.
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions, OutputStream)}, reading the
+     * JPEG XL image from a memory segment.
      * A native segment, such as a mapped file, is passed to libjxl without
      * copying and must not change during the call; a heap segment is copied
      * to native memory first.
      *
-     * @param jxl    the JPEG XL file
-     * @param limits the limits; {@link JxlLimits#maxPixels()} and
-     *               {@link JxlLimits#maxJpegBytes()} apply
-     * @param out    the channel that receives the JPEG file
+     * @param jxl     the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @param out     the stream that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException       if writing to the stream fails
+     * @throws JxlLimitException if the image or the JPEG file exceeds
+     *                           the limits
+     * @throws JxlException      if the data is not valid JPEG XL or
+     *                           contains no JPEG reconstruction data
+     */
+    public static long toJpeg(MemorySegment jxl, JxlDecodeOptions options, OutputStream out)
+            throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, options, OutputSink.of(out));
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions, WritableByteChannel)},
+     * reading the JPEG XL image from a memory segment.
+     * A native segment, such as a mapped file, is passed to libjxl without
+     * copying and must not change during the call; a heap segment is copied
+     * to native memory first.
+     *
+     * @param jxl     the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @param out     the channel that receives the JPEG file
      * @return the number of bytes written
      * @throws IOException              if writing to the channel fails
      * @throws IllegalArgumentException if the channel is in non-blocking mode
@@ -254,36 +433,189 @@ public final class JxlTranscoder {
      * @throws JxlException             if the data is not valid JPEG XL or
      *                                  contains no JPEG reconstruction data
      */
-    public static long toJpeg(MemorySegment jxl, JxlLimits limits, WritableByteChannel out) throws IOException {
-        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, limits, OutputSink.of(out));
+    public static long toJpeg(MemorySegment jxl, JxlDecodeOptions options, WritableByteChannel out)
+            throws IOException {
+        return toJpeg(jxl, OUTPUT_CHUNK_SIZE, options, OutputSink.of(out));
     }
 
     /**
-     * Like {@link #toJpeg(byte[], JxlLimits)}, with a given output buffer size
-     * (tests use a small size to exercise the multi-chunk path).
+     * Like {@link #toJpeg(byte[])}, reading the JPEG XL image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file the JPEG XL file
+     * @return the original JPEG file
+     * @throws IOException       if the file cannot be read
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           default limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
      */
-    static byte[] toJpeg(byte[] jxl, int chunkSize, JxlLimits limits) {
-        return OutputSink.toBytes(sink -> toJpeg(jxl, chunkSize, limits, sink));
+    public static byte[] toJpeg(Path file) throws IOException {
+        return toJpeg(file, JxlDecodeOptions.defaults());
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions)}, reading the JPEG XL image
+     * from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @return the original JPEG file
+     * @throws IOException       if the file cannot be read
+     * @throws JxlLimitException if the image or the JPEG file exceeds the
+     *                           limits
+     * @throws JxlException      if the data is not valid JPEG XL or contains
+     *                           no JPEG reconstruction data
+     */
+    public static byte[] toJpeg(Path file, JxlDecodeOptions options) throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment input = NativeInput.read(file, arena);
+            return OutputSink.toBytes(sink -> restore(input, OUTPUT_CHUNK_SIZE, options.limits(), sink));
+        }
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions, OutputStream)}, reading the
+     * JPEG XL image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @param out     the stream that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException       if the file cannot be read or writing to
+     *                           the stream fails
+     * @throws JxlLimitException if the image or the JPEG file exceeds
+     *                           the limits
+     * @throws JxlException      if the data is not valid JPEG XL or
+     *                           contains no JPEG reconstruction data
+     */
+    public static long toJpeg(Path file, JxlDecodeOptions options, OutputStream out)
+            throws IOException {
+        return toJpeg(file, options, OutputSink.of(out));
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions, WritableByteChannel)},
+     * reading the JPEG XL image from a file.
+     * The file is read into native memory, not onto the Java heap, so it may
+     * be larger than 2 GiB.
+     *
+     * @param file    the JPEG XL file
+     * @param options the limits ({@link JxlLimits#maxPixels()} and
+     *                {@link JxlLimits#maxJpegBytes()} apply); the color space
+     *                setting has no effect
+     * @param out     the channel that receives the JPEG file
+     * @return the number of bytes written
+     * @throws IOException              if the file cannot be read or writing to
+     *                                  the channel fails
+     * @throws IllegalArgumentException if the channel is in non-blocking mode
+     * @throws JxlLimitException        if the image or the JPEG file exceeds
+     *                                  the limits
+     * @throws JxlException             if the data is not valid JPEG XL or
+     *                                  contains no JPEG reconstruction data
+     */
+    public static long toJpeg(Path file, JxlDecodeOptions options, WritableByteChannel out)
+            throws IOException {
+        return toJpeg(file, options, OutputSink.of(out));
+    }
+
+    /** Like {@link #fromJpeg(byte[], JxlEncodeOptions)}, with a given output buffer size. */
+    static byte[] fromJpeg(byte[] jpeg, JxlEncodeOptions options, int chunkSize) {
+        return OutputSink.toBytes(sink -> fromJpeg(jpeg, options, sink, chunkSize));
+    }
+
+    /** Transcodes to a sink, with a given output buffer size. */
+    static long fromJpeg(byte[] jpeg, JxlEncodeOptions options, OutputSink sink, int chunkSize) throws IOException {
+        Objects.requireNonNull(jpeg, "jpeg");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            return transcode(arena.allocateFrom(JAVA_BYTE, jpeg), options, sink, chunkSize);
+        }
+    }
+
+    private static long fromJpeg(MemorySegment jpeg, JxlEncodeOptions options, OutputSink sink) throws IOException {
+        Objects.requireNonNull(jpeg, "jpeg");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            return transcode(NativeInput.of(jpeg, arena), options, sink, NativeEncoder.OUTPUT_CHUNK_SIZE);
+        }
+    }
+
+    private static long fromJpeg(Path file, JxlEncodeOptions options, OutputSink sink) throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            return transcode(NativeInput.read(file, arena), options, sink, NativeEncoder.OUTPUT_CHUNK_SIZE);
+        }
+    }
+
+    /** Transcodes a JPEG file in native memory to a sink. */
+    private static long transcode(MemorySegment jpeg, JxlEncodeOptions options, OutputSink sink, int chunkSize)
+            throws IOException {
+        try (Arena arena = Arena.ofConfined(); NativeEncoder encoder = NativeEncoder.create()) {
+            MemorySegment handle = encoder.handle();
+            // The reconstruction data is stored in a box, which requires the container format.
+            encoder.check(Jxl.JxlEncoderUseContainer(handle, Jxl.JXL_TRUE()), "JxlEncoderUseContainer");
+            encoder.check(Jxl.JxlEncoderStoreJPEGMetadata(handle, Jxl.JXL_TRUE()), "JxlEncoderStoreJPEGMetadata");
+            MemorySegment settings = encoder.createFrameSettings(options.effort());
+            encoder.check(Jxl.JxlEncoderAddJPEGFrame(settings, jpeg, jpeg.byteSize()), "JxlEncoderAddJPEGFrame");
+            Jxl.JxlEncoderCloseInput(handle);
+            return encoder.writeOutput(arena, sink, chunkSize);
+        }
+    }
+
+    /**
+     * Like {@link #toJpeg(byte[], JxlDecodeOptions)}, with a given output
+     * buffer size (tests use a small size to exercise the multi-chunk path).
+     */
+    static byte[] toJpeg(byte[] jxl, int chunkSize, JxlDecodeOptions options) {
+        return OutputSink.toBytes(sink -> toJpeg(jxl, chunkSize, options, sink));
     }
 
     /** Restores the JPEG file to a sink, with a given output buffer size. */
-    static long toJpeg(byte[] jxl, int chunkSize, JxlLimits limits, OutputSink sink) throws IOException {
+    static long toJpeg(byte[] jxl, int chunkSize, JxlDecodeOptions options, OutputSink sink) throws IOException {
         Objects.requireNonNull(jxl, "jxl");
-        return toJpeg(MemorySegment.ofArray(jxl), chunkSize, limits, sink);
+        return toJpeg(MemorySegment.ofArray(jxl), chunkSize, options, sink);
     }
 
-    private static long toJpeg(MemorySegment jxl, int chunkSize, JxlLimits limits, OutputSink sink)
+    private static long toJpeg(MemorySegment jxl, int chunkSize, JxlDecodeOptions options, OutputSink sink)
             throws IOException {
         Objects.requireNonNull(jxl, "jxl");
-        Objects.requireNonNull(limits, "limits");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            return restore(NativeInput.of(jxl, arena), chunkSize, options.limits(), sink);
+        }
+    }
+
+    private static long toJpeg(Path file, JxlDecodeOptions options, OutputSink sink) throws IOException {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(options, "options");
+        try (Arena arena = Arena.ofConfined()) {
+            return restore(NativeInput.read(file, arena), OUTPUT_CHUNK_SIZE, options.limits(), sink);
+        }
+    }
+
+    /** Restores the JPEG file from a JPEG XL file in native memory. */
+    private static long restore(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink)
+            throws IOException {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("chunkSize must be positive: " + chunkSize);
         }
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment input = NativeInput.of(jxl, arena);
             JxlDecoder.checkFrames(input, limits, 1, false, arena);
-            return reconstruct(input, chunkSize, limits, sink);
         }
+        return reconstruct(input, chunkSize, limits, sink);
     }
 
     private static long reconstruct(MemorySegment input, int chunkSize, JxlLimits limits, OutputSink sink)

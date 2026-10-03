@@ -13,7 +13,6 @@ import panamage.jxl.JxlDecoder;
 import panamage.jxl.JxlFrameDecoder;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlImageInfo;
-import panamage.jxl.JxlLimits;
 import panamage.jxl.JxlMetadata;
 import panamage.jxl.JxlSampleType;
 
@@ -69,8 +68,8 @@ final class EncodedInput implements AutoCloseable {
         return JxlDecoder.readAnimationInfo(data);
     }
 
-    JxlMetadata readMetadata(JxlLimits limits) {
-        return JxlDecoder.readMetadata(data, limits);
+    JxlMetadata readMetadata(JxlDecodeOptions options) {
+        return JxlDecoder.readMetadata(data, options);
     }
 
     JxlImage decode(int channels, JxlSampleType type, JxlDecodeOptions options) {

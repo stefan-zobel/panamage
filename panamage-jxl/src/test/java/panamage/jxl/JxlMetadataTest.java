@@ -64,8 +64,8 @@ class JxlMetadataTest {
 
         assertTrue(xmp.length > 200_000);
         assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded).xmp());
-        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1000, JxlLimits.defaults()).xmp());
-        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1, JxlLimits.defaults()).xmp());
+        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1000, JxlDecodeOptions.defaults()).xmp());
+        assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded, 1, JxlDecodeOptions.defaults()).xmp());
     }
 
     @Test
@@ -86,7 +86,7 @@ class JxlMetadataTest {
         byte[] encoded = JxlEncoder.encode(new JxlImage.Uint8(width, height, 3, pixels), JxlEncodeOptions.ofLossless(),
                 metadata);
         save("orientation-6.jxl", encoded);
-        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = (JxlImage.Uint8) JxlDecoder.decode(encoded, 3, JxlSampleType.UINT8);
 
         // Orientation 6 rotates 90 degrees clockwise: the result is 2x4, and the
         // pixel at (x', y') comes from (x = y', y = height - 1 - x').

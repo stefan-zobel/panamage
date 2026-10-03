@@ -32,6 +32,7 @@ import panamage.jxl.JxlFrame;
 import panamage.jxl.JxlFrameInfo;
 import panamage.jxl.JxlImage;
 import panamage.jxl.JxlMetadata;
+import panamage.jxl.JxlSampleType;
 
 /**
  * Images whose pixels are not sRGB, using Java's built-in linear RGB profile:
@@ -50,7 +51,7 @@ class IccProfileTest {
         byte[] encoded = JxlEncoder.encode(linear, JxlEncodeOptions.ofLossless());
         save("linear-rgb-lossless.jxl", encoded);
 
-        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = (JxlImage.Uint8) JxlDecoder.decode(encoded, 3, JxlSampleType.UINT8);
 
         assertFalse(decoded.isSrgb());
         assertArrayEquals(linear.pixels(), decoded.pixels());
@@ -91,7 +92,7 @@ class IccProfileTest {
     void lossyImagesDecodeToPixelsThatMatchTheirProfile() {
         byte[] encoded = JxlEncoder.encode(linearRgbImage(), JxlEncodeOptions.ofDistance(1.0f));
 
-        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = (JxlImage.Uint8) JxlDecoder.decode(encoded, 3, JxlSampleType.UINT8);
 
         // libjxl may return lossy images in sRGB or in their original color space;
         // either way, pixels and profile together must describe linear 128 (sRGB 188).

@@ -150,6 +150,16 @@ class JxlChannelsTest {
     }
 
     @Test
+    void encodesWithTheDefaultOptions() {
+        JxlChannels channels = JxlDecoder.decodeChannels(TestImages.gradientJxl(), JxlSampleType.UINT8);
+
+        byte[] data = JxlEncoder.encode(channels);
+
+        assertArrayEquals(JxlEncoder.encode(channels, JxlEncodeOptions.defaults()), data);
+        assertEquals(TestImages.WIDTH, JxlDecoder.readInfo(data).width());
+    }
+
+    @Test
     void namedAlphaChannelAndAlphaAfterOtherChannelsRoundTrip() {
         JxlChannels namedAlpha = JxlChannels.builder(WIDTH, HEIGHT).gray(uint8Plane(0))
                 .add(new JxlExtraChannel(JxlChannelType.ALPHA, "mask"), uint8Plane(1)).build();
@@ -316,10 +326,10 @@ class JxlChannelsTest {
         byte[] data = JxlEncoder.encode(builder.build(), JxlEncodeOptions.ofLossless());
 
         // 5 channels count twice.
-        JxlLimits limits = JxlLimits.defaults().withMaxPixels(2L * SAMPLES - 1);
-        assertThrows(JxlLimitException.class, () -> JxlDecoder.decodeChannels(data, JxlSampleType.UINT8, limits));
+        JxlDecodeOptions tooSmall = TestImages.maxPixels(2L * SAMPLES - 1);
+        assertThrows(JxlLimitException.class, () -> JxlDecoder.decodeChannels(data, JxlSampleType.UINT8, tooSmall));
         assertEquals(5, JxlDecoder.decodeChannels(data, JxlSampleType.UINT8,
-                limits.withMaxPixels(2L * SAMPLES)).channels());
+                TestImages.maxPixels(2L * SAMPLES)).channels());
     }
 
     @Test

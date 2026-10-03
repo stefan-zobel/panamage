@@ -3,7 +3,9 @@ package panamage.jxl;
 import panamage.jxl.ffi.Jxl;
 
 /**
- * Settings for {@link JxlEncoder}.
+ * Settings for {@link JxlEncoder} and {@link JxlFrameEncoder}.
+ * {@link JxlTranscoder#fromJpeg(byte[], JxlEncodeOptions)} uses only the
+ * effort, because it always transcodes without loss.
  * <p>
  * Use one of the factory methods and optionally adjust the effort:
  * {@snippet :

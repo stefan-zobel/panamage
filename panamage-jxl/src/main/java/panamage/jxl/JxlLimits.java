@@ -25,13 +25,13 @@ import java.util.Objects;
  * limit applies to the JPEG file that {@link JxlTranscoder#toJpeg}
  * reconstructs.
  * <p>
- * The methods without a {@code JxlLimits} parameter use {@link #defaults()},
- * which can be configured with the system properties
+ * Limits are passed in {@link JxlDecodeOptions}; the methods without options
+ * use {@link #defaults()}, which can be configured with the system properties
  * {@value #MAX_PIXELS_PROPERTY}, {@value #MAX_METADATA_BYTES_PROPERTY} and
  * {@value #MAX_JPEG_BYTES_PROPERTY}.
  * {@snippet :
- * JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8,
- *         JxlLimits.defaults().withMaxPixels(50_000_000));
+ * JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8, JxlDecodeOptions.defaults()
+ *         .withLimits(JxlLimits.defaults().withMaxPixels(50_000_000)));
  * }
  * <p>
  * Limits are immutable. Start from {@link #defaults()} or

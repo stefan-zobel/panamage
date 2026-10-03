@@ -36,6 +36,31 @@ final class TestImages {
     private TestImages() {
     }
 
+    /** The default options with the given limits. */
+    static JxlDecodeOptions options(JxlLimits limits) {
+        return JxlDecodeOptions.defaults().withLimits(limits);
+    }
+
+    /** The default options with the given pixel limit. */
+    static JxlDecodeOptions maxPixels(long maxPixels) {
+        return options(JxlLimits.defaults().withMaxPixels(maxPixels));
+    }
+
+    /** The default options with the given metadata limit. */
+    static JxlDecodeOptions maxMetadataBytes(long maxMetadataBytes) {
+        return options(JxlLimits.defaults().withMaxMetadataBytes(maxMetadataBytes));
+    }
+
+    /** The default options with the given JPEG limit. */
+    static JxlDecodeOptions maxJpegBytes(long maxJpegBytes) {
+        return options(JxlLimits.defaults().withMaxJpegBytes(maxJpegBytes));
+    }
+
+    /** The default options without limits. */
+    static JxlDecodeOptions unlimited() {
+        return options(JxlLimits.unlimited());
+    }
+
     /** The lossless JPEG XL file created with cjxl. */
     static byte[] gradientJxl() {
         return resource("gradient.jxl");

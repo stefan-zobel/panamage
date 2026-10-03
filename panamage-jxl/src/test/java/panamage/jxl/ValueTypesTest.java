@@ -15,7 +15,8 @@ class ValueTypesTest {
     void limits() {
         JxlLimits limits = JxlLimits.unlimited().withMaxPixels(10).withMaxMetadataBytes(20).withMaxJpegBytes(30);
 
-        assertEqualValues(limits, JxlLimits.unlimited().withMaxJpegBytes(30).withMaxMetadataBytes(20).withMaxPixels(10));
+        assertEqualValues(limits,
+                JxlLimits.unlimited().withMaxJpegBytes(30).withMaxMetadataBytes(20).withMaxPixels(10));
         assertNotEquals(limits, limits.withMaxPixels(11));
         assertNotEquals(limits, limits.withMaxMetadataBytes(21));
         assertNotEquals(limits, limits.withMaxJpegBytes(31));

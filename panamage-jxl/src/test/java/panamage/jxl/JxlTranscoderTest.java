@@ -65,7 +65,8 @@ class JxlTranscoderTest {
     void roundTripIsBitExactForLowAndHighEffort() {
         byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
         for (int effort : new int[] {1, 9}) {
-            assertArrayEquals(jpeg, JxlTranscoder.toJpeg(JxlTranscoder.fromJpeg(jpeg, effort)), "effort " + effort);
+            byte[] jxl = JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless().withEffort(effort));
+            assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl), "effort " + effort);
         }
     }
 
@@ -75,11 +76,11 @@ class JxlTranscoderTest {
         // Odd sizes far below the file sizes force many partial buffers in both directions.
         byte[] jpeg = TestImages.resource(name);
 
-        byte[] jxl = JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, 997);
+        byte[] jxl = JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless(), 997);
 
         assertArrayEquals(JxlTranscoder.fromJpeg(jpeg), jxl);
-        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 331, JxlLimits.defaults()));
-        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1, JxlLimits.defaults()));
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 331, JxlDecodeOptions.defaults()));
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1, JxlDecodeOptions.defaults()));
     }
 
     @Test
@@ -88,22 +89,22 @@ class JxlTranscoderTest {
         byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
 
         ByteArrayOutputStream jxlStream = new ByteArrayOutputStream();
-        assertEquals(jxl.length, JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, jxlStream));
+        assertEquals(jxl.length, JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless(), jxlStream));
         assertArrayEquals(jxl, jxlStream.toByteArray());
 
         ByteArrayOutputStream jxlChannel = new ByteArrayOutputStream();
         try (WritableByteChannel channel = Channels.newChannel(jxlChannel)) {
-            assertEquals(jxl.length, JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, channel));
+            assertEquals(jxl.length, JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless(), channel));
         }
         assertArrayEquals(jxl, jxlChannel.toByteArray());
 
         ByteArrayOutputStream jpegStream = new ByteArrayOutputStream();
-        assertEquals(jpeg.length, JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), jpegStream));
+        assertEquals(jpeg.length, JxlTranscoder.toJpeg(jxl, JxlDecodeOptions.defaults(), jpegStream));
         assertArrayEquals(jpeg, jpegStream.toByteArray());
 
         ByteArrayOutputStream jpegChannel = new ByteArrayOutputStream();
         try (WritableByteChannel channel = Channels.newChannel(jpegChannel)) {
-            assertEquals(jpeg.length, JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), channel));
+            assertEquals(jpeg.length, JxlTranscoder.toJpeg(jxl, JxlDecodeOptions.defaults(), channel));
         }
         assertArrayEquals(jpeg, jpegChannel.toByteArray());
     }
@@ -115,12 +116,12 @@ class JxlTranscoderTest {
         byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
 
         ByteArrayOutputStream jxlOut = new ByteArrayOutputStream();
-        JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, OutputSink.of(jxlOut), 997);
+        JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless(), OutputSink.of(jxlOut), 997);
         assertArrayEquals(jxl, jxlOut.toByteArray());
 
         for (int chunkSize : new int[] {331, 1}) {
             ByteArrayOutputStream jpegOut = new ByteArrayOutputStream();
-            long written = JxlTranscoder.toJpeg(jxl, chunkSize, JxlLimits.defaults(), OutputSink.of(jpegOut));
+            long written = JxlTranscoder.toJpeg(jxl, chunkSize, JxlDecodeOptions.defaults(), OutputSink.of(jpegOut));
             assertArrayEquals(jpeg, jpegOut.toByteArray(), "chunk size " + chunkSize);
             assertEquals(jpeg.length, written, "chunk size " + chunkSize);
         }
@@ -130,10 +131,10 @@ class JxlTranscoderTest {
     void jpegLimitAppliesWhenWritingToAStream() {
         byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
         byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
-        JxlLimits limits = JxlLimits.defaults().withMaxJpegBytes(jpeg.length - 1L);
+        JxlDecodeOptions tooSmall = TestImages.maxJpegBytes(jpeg.length - 1L);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, limits, out));
+        assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, tooSmall, out));
         assertTrue(out.size() < jpeg.length, "written " + out.size());
     }
 
@@ -142,20 +143,38 @@ class JxlTranscoderTest {
         byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
         byte[] jxl = TestImages.gradientJxl();
         assertThrows(NullPointerException.class,
-                () -> JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, (OutputStream) null));
+                () -> JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless(), (OutputStream) null));
         assertThrows(NullPointerException.class,
-                () -> JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.DEFAULT_EFFORT, (WritableByteChannel) null));
+                () -> JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless(), (WritableByteChannel) null));
         assertThrows(NullPointerException.class,
-                () -> JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), (OutputStream) null));
+                () -> JxlTranscoder.toJpeg(jxl, JxlDecodeOptions.defaults(), (OutputStream) null));
         assertThrows(NullPointerException.class,
-                () -> JxlTranscoder.toJpeg(jxl, JxlLimits.defaults(), (WritableByteChannel) null));
+                () -> JxlTranscoder.toJpeg(jxl, JxlDecodeOptions.defaults(), (WritableByteChannel) null));
     }
 
     @Test
-    void rejectsInvalidEffort() {
+    void rejectsMissingOptions() {
         byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
-        assertThrows(IllegalArgumentException.class, () -> JxlTranscoder.fromJpeg(jpeg, 0));
-        assertThrows(IllegalArgumentException.class, () -> JxlTranscoder.fromJpeg(jpeg, 11));
+        byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
+        assertThrows(NullPointerException.class, () -> JxlTranscoder.fromJpeg(jpeg, (JxlEncodeOptions) null));
+        assertThrows(NullPointerException.class, () -> JxlTranscoder.toJpeg(jxl, (JxlDecodeOptions) null));
+    }
+
+    @Test
+    void fromJpegUsesOnlyTheEffort() {
+        byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
+
+        assertArrayEquals(JxlTranscoder.fromJpeg(jpeg), JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofDistance(3)));
+        assertArrayEquals(JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofLossless().withEffort(3)),
+                JxlTranscoder.fromJpeg(jpeg, JxlEncodeOptions.ofDistance(3).withEffort(3)));
+    }
+
+    @Test
+    void toJpegIgnoresTheColorSpaceSetting() {
+        byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
+        byte[] jxl = JxlTranscoder.fromJpeg(jpeg);
+
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, JxlDecodeOptions.defaults().withSrgb(true)));
     }
 
     @Test

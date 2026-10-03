@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Reading the encoded image from memory segments and files gives the same
- * results as from byte arrays.
+ * results as from byte arrays, with every form of the methods.
  */
 class InputSourceTest {
 
@@ -45,12 +45,16 @@ class InputSourceTest {
                 assertSameInfo(expected, JxlDecoder.readInfo(segment));
                 assertEquals(JxlDecoder.readExtraChannels(data), JxlDecoder.readExtraChannels(segment));
                 assertEquals(JxlDecoder.readAnimationInfo(data), JxlDecoder.readAnimationInfo(segment));
+                assertArrayEquals(JxlDecoder.readMetadata(data).exif(), JxlDecoder.readMetadata(segment).exif());
                 assertArrayEquals(JxlDecoder.readMetadata(data).exif(),
-                        JxlDecoder.readMetadata(segment, JxlLimits.defaults()).exif());
+                        JxlDecoder.readMetadata(segment, OPTIONS).exif());
             }
         }
         assertSameInfo(expected, JxlDecoder.readInfo(file));
-        assertArrayEquals(JxlDecoder.readMetadata(data).exif(), JxlDecoder.readMetadata(file, JxlLimits.defaults()).exif());
+        assertEquals(JxlDecoder.readExtraChannels(data), JxlDecoder.readExtraChannels(file));
+        assertEquals(JxlDecoder.readAnimationInfo(data), JxlDecoder.readAnimationInfo(file));
+        assertArrayEquals(JxlDecoder.readMetadata(data).exif(), JxlDecoder.readMetadata(file).exif());
+        assertArrayEquals(JxlDecoder.readMetadata(data).exif(), JxlDecoder.readMetadata(file, OPTIONS).exif());
     }
 
     @Test
@@ -62,14 +66,19 @@ class InputSourceTest {
         try (Arena arena = Arena.ofConfined()) {
             for (MemorySegment segment : segments(data, file, arena)) {
                 assertArrayEquals(expected, pixels(JxlDecoder.decode(segment, 4, JxlSampleType.UINT8, OPTIONS)));
+                assertArrayEquals(expected, pixels(JxlDecoder.decode(segment, 4, JxlSampleType.UINT8)));
                 assertArrayEquals(expected, JxlDecoder.decode(segment).pixels());
                 assertEquals(TestImages.WIDTH, JxlDecoder.decodeChannels(segment, JxlSampleType.UINT8, OPTIONS)
                         .width());
+                assertEquals(TestImages.WIDTH, JxlDecoder.decodeChannels(segment, JxlSampleType.UINT8).width());
             }
         }
         assertArrayEquals(expected, pixels(JxlDecoder.decode(file, 4, JxlSampleType.UINT8, OPTIONS)));
-        JxlChannels channels = JxlDecoder.decodeChannels(file, JxlSampleType.UINT8, OPTIONS);
-        assertEquals(JxlDecoder.decodeChannels(data, JxlSampleType.UINT8).channels(), channels.channels());
+        assertArrayEquals(expected, pixels(JxlDecoder.decode(file, 4, JxlSampleType.UINT8)));
+        assertArrayEquals(expected, JxlDecoder.decode(file).pixels());
+        int channels = JxlDecoder.decodeChannels(data, JxlSampleType.UINT8).channels();
+        assertEquals(channels, JxlDecoder.decodeChannels(file, JxlSampleType.UINT8, OPTIONS).channels());
+        assertEquals(channels, JxlDecoder.decodeChannels(file, JxlSampleType.UINT8).channels());
     }
 
     @Test
@@ -81,16 +90,30 @@ class InputSourceTest {
         try (Arena arena = Arena.ofConfined()) {
             for (MemorySegment segment : segments(data, file, arena)) {
                 assertSameFrames(expected, JxlDecoder.decodeFrames(segment, 4, JxlSampleType.UINT8, OPTIONS));
+                assertSameFrames(expected, JxlDecoder.decodeFrames(segment, 4, JxlSampleType.UINT8));
                 try (JxlFrameDecoder decoder = JxlFrameDecoder.open(segment, 4, JxlSampleType.UINT8, OPTIONS)) {
+                    assertSameFrames(expected, readAll(decoder));
+                }
+                try (JxlFrameDecoder decoder = JxlFrameDecoder.open(segment, 4, JxlSampleType.UINT8)) {
                     assertSameFrames(expected, readAll(decoder));
                 }
                 try (JxlFrameDecoder decoder = JxlFrameDecoder.openChannels(segment, JxlSampleType.UINT8, OPTIONS)) {
                     assertEquals(expected.size(), countChannelFrames(decoder));
                 }
+                try (JxlFrameDecoder decoder = JxlFrameDecoder.openChannels(segment, JxlSampleType.UINT8)) {
+                    assertEquals(expected.size(), countChannelFrames(decoder));
+                }
             }
         }
         assertSameFrames(expected, JxlDecoder.decodeFrames(file, 4, JxlSampleType.UINT8, OPTIONS));
+        assertSameFrames(expected, JxlDecoder.decodeFrames(file, 4, JxlSampleType.UINT8));
+        try (JxlFrameDecoder decoder = JxlFrameDecoder.open(file, 4, JxlSampleType.UINT8)) {
+            assertSameFrames(expected, readAll(decoder));
+        }
         try (JxlFrameDecoder decoder = JxlFrameDecoder.openChannels(file, JxlSampleType.UINT8, OPTIONS)) {
+            assertEquals(expected.size(), countChannelFrames(decoder));
+        }
+        try (JxlFrameDecoder decoder = JxlFrameDecoder.openChannels(file, JxlSampleType.UINT8)) {
             assertEquals(expected.size(), countChannelFrames(decoder));
         }
     }
@@ -116,22 +139,63 @@ class InputSourceTest {
     }
 
     @Test
-    void jpegReconstructionFromSegments() throws IOException {
+    void jpegReconstructionFromAllSources() throws IOException {
         byte[] data = TestImages.resource(TestImages.PHOTO_CJXL_REFERENCE);
         byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
         Path file = write("photo.jxl", data);
 
         try (Arena arena = Arena.ofConfined()) {
             for (MemorySegment segment : segments(data, file, arena)) {
+                assertArrayEquals(jpeg, JxlTranscoder.toJpeg(segment));
+                assertArrayEquals(jpeg, JxlTranscoder.toJpeg(segment, OPTIONS));
                 ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                assertEquals(jpeg.length, JxlTranscoder.toJpeg(segment, JxlLimits.defaults(), stream));
+                assertEquals(jpeg.length, JxlTranscoder.toJpeg(segment, OPTIONS, stream));
                 assertArrayEquals(jpeg, stream.toByteArray());
 
                 ByteArrayOutputStream channelTarget = new ByteArrayOutputStream();
-                JxlTranscoder.toJpeg(segment, JxlLimits.defaults(), Channels.newChannel(channelTarget));
+                JxlTranscoder.toJpeg(segment, OPTIONS, Channels.newChannel(channelTarget));
                 assertArrayEquals(jpeg, channelTarget.toByteArray());
             }
         }
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(file));
+        assertArrayEquals(jpeg, JxlTranscoder.toJpeg(file, OPTIONS));
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        assertEquals(jpeg.length, JxlTranscoder.toJpeg(file, OPTIONS, stream));
+        assertArrayEquals(jpeg, stream.toByteArray());
+        ByteArrayOutputStream channelTarget = new ByteArrayOutputStream();
+        assertEquals(jpeg.length, JxlTranscoder.toJpeg(file, OPTIONS, Channels.newChannel(channelTarget)));
+        assertArrayEquals(jpeg, channelTarget.toByteArray());
+    }
+
+    @Test
+    void jpegTranscodingFromAllSources() throws IOException {
+        byte[] jpeg = TestImages.resource("photo-420-exif.jpg");
+        byte[] expected = JxlTranscoder.fromJpeg(jpeg);
+        JxlEncodeOptions fast = JxlEncodeOptions.ofLossless().withEffort(1);
+        byte[] expectedFast = JxlTranscoder.fromJpeg(jpeg, fast);
+        Path file = write("photo.jpg", jpeg);
+
+        try (Arena arena = Arena.ofConfined()) {
+            for (MemorySegment segment : segments(jpeg, file, arena)) {
+                assertArrayEquals(expected, JxlTranscoder.fromJpeg(segment));
+                assertArrayEquals(expectedFast, JxlTranscoder.fromJpeg(segment, fast));
+                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                assertEquals(expected.length, JxlTranscoder.fromJpeg(segment, JxlEncodeOptions.ofLossless(), stream));
+                assertArrayEquals(expected, stream.toByteArray());
+                ByteArrayOutputStream channelTarget = new ByteArrayOutputStream();
+                JxlTranscoder.fromJpeg(segment, JxlEncodeOptions.ofLossless(), Channels.newChannel(channelTarget));
+                assertArrayEquals(expected, channelTarget.toByteArray());
+            }
+        }
+        assertArrayEquals(expected, JxlTranscoder.fromJpeg(file));
+        assertArrayEquals(expectedFast, JxlTranscoder.fromJpeg(file, fast));
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        assertEquals(expected.length, JxlTranscoder.fromJpeg(file, JxlEncodeOptions.ofLossless(), stream));
+        assertArrayEquals(expected, stream.toByteArray());
+        ByteArrayOutputStream channelTarget = new ByteArrayOutputStream();
+        assertEquals(expected.length,
+                JxlTranscoder.fromJpeg(file, JxlEncodeOptions.ofLossless(), Channels.newChannel(channelTarget)));
+        assertArrayEquals(expected, channelTarget.toByteArray());
     }
 
     @Test
@@ -154,6 +218,9 @@ class InputSourceTest {
 
         assertThrows(NoSuchFileException.class, () -> JxlDecoder.readInfo(missing));
         assertThrows(NoSuchFileException.class, () -> JxlFrameDecoder.open(missing, 4, JxlSampleType.UINT8, OPTIONS));
+        assertThrows(NoSuchFileException.class, () -> JxlDecoder.readAnimationInfo(missing));
+        assertThrows(NoSuchFileException.class, () -> JxlTranscoder.fromJpeg(missing));
+        assertThrows(NoSuchFileException.class, () -> JxlTranscoder.toJpeg(missing));
         assertThrows(JxlException.class, () -> JxlDecoder.decode(empty, 4, JxlSampleType.UINT8, OPTIONS));
         assertThrows(JxlException.class, () -> JxlDecoder.readInfo(invalid));
         assertThrows(JxlException.class, () -> JxlFrameDecoder.open(invalid, 4, JxlSampleType.UINT8, OPTIONS));

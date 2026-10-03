@@ -37,7 +37,7 @@ class JxlBoxTest {
         save("boxes.jxl", data);
 
         for (int chunkSize : new int[] {64 * 1024, 100, 1}) {
-            JxlMetadata read = JxlDecoder.readMetadata(data, chunkSize, JxlLimits.defaults());
+            JxlMetadata read = JxlDecoder.readMetadata(data, chunkSize, JxlDecodeOptions.defaults());
             assertArrayEquals(XMP, read.xmp(), "chunk size " + chunkSize);
             assertNull(read.exif());
             assertSameBoxes(boxes, read.boxes());
@@ -106,11 +106,11 @@ class JxlBoxTest {
                 JxlMetadata.NONE.withBoxes(boxes));
 
         assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.readMetadata(data, JxlLimits.defaults().withMaxMetadataBytes(2999)));
-        assertEquals(3, JxlDecoder.readMetadata(data, JxlLimits.defaults().withMaxMetadataBytes(3000)).boxes()
+                () -> JxlDecoder.readMetadata(data, TestImages.maxMetadataBytes(2999)));
+        assertEquals(3, JxlDecoder.readMetadata(data, TestImages.maxMetadataBytes(3000)).boxes()
                 .size());
         assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.readMetadata(data, JxlLimits.defaults().withMaxMetadataBytes(999)));
+                () -> JxlDecoder.readMetadata(data, TestImages.maxMetadataBytes(999)));
     }
 
     @Test

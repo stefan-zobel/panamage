@@ -66,7 +66,7 @@ class JxlDecoderTest {
 
     @Test
     void decodesToRgbWithoutAlpha() {
-        JxlImage.Uint8 image = JxlDecoder.decode(TestImages.gradientJxl(), 3);
+        JxlImage.Uint8 image = (JxlImage.Uint8) JxlDecoder.decode(TestImages.gradientJxl(), 3, JxlSampleType.UINT8);
 
         assertEquals(3, image.channels());
         byte[] rgba = TestImages.gradientRgbaPixels();
@@ -84,7 +84,7 @@ class JxlDecoderTest {
         byte[] encoded = JxlEncoder.encode(gray, JxlEncodeOptions.ofLossless());
 
         JxlImageInfo info = JxlDecoder.readInfo(encoded);
-        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, info.channels());
+        JxlImage.Uint8 decoded = (JxlImage.Uint8) JxlDecoder.decode(encoded, info.channels(), JxlSampleType.UINT8);
 
         assertEquals(1, info.channels());
         assertTrue(decoded.isSrgb());
@@ -93,8 +93,9 @@ class JxlDecoderTest {
 
     @Test
     void rejectsInvalidChannelCounts() {
-        assertThrows(IllegalArgumentException.class, () -> JxlDecoder.decode(TestImages.gradientJxl(), 0));
-        assertThrows(IllegalArgumentException.class, () -> JxlDecoder.decode(TestImages.gradientJxl(), 5));
+        byte[] data = TestImages.gradientJxl();
+        assertThrows(IllegalArgumentException.class, () -> JxlDecoder.decode(data, 0, JxlSampleType.UINT8));
+        assertThrows(IllegalArgumentException.class, () -> JxlDecoder.decode(data, 5, JxlSampleType.UINT8));
     }
 
     @Test

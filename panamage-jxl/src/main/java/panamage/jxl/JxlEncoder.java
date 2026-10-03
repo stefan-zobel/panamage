@@ -138,6 +138,21 @@ public final class JxlEncoder {
     }
 
     /**
+     * Encodes an image with separate channels with
+     * {@link JxlEncodeOptions#defaults()}; see
+     * {@link #encode(JxlChannels, JxlEncodeOptions)}.
+     *
+     * @param image the image to encode
+     * @return the JPEG XL file
+     * @throws IllegalArgumentException if an extra channel has a type that
+     *                                  cannot be written
+     * @throws JxlException             if libjxl rejects the image
+     */
+    public static byte[] encode(JxlChannels image) {
+        return encode(image, JxlEncodeOptions.defaults());
+    }
+
+    /**
      * Encodes an image with separate channels, such as a microscope image
      * with several fluorescence channels, with the given options.
      * <p>

@@ -28,8 +28,8 @@ class DecompressionBombTest {
     @Test
     void rejectsImagesBeyondThePixelLimit() {
         byte[] data = TestImages.gradientJxl();
-        JxlLimits tooSmall = JxlLimits.defaults().withMaxPixels(GRADIENT_PIXELS - 1);
-        JxlLimits justEnough = JxlLimits.defaults().withMaxPixels(GRADIENT_PIXELS);
+        JxlDecodeOptions tooSmall = TestImages.maxPixels(GRADIENT_PIXELS - 1);
+        JxlDecodeOptions justEnough = TestImages.maxPixels(GRADIENT_PIXELS);
 
         JxlLimitException e = assertThrows(JxlLimitException.class,
                 () -> JxlDecoder.decode(data, 4, JxlSampleType.UINT8, tooSmall));
@@ -42,9 +42,9 @@ class DecompressionBombTest {
     void rejectsImagesInMemorySegmentsBeyondThePixelLimit() {
         MemorySegment data = MemorySegment.ofArray(TestImages.gradientJxl());
         assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.decode(data, JxlLimits.defaults().withMaxPixels(GRADIENT_PIXELS - 1)));
+                () -> JxlDecoder.decode(data, 4, JxlSampleType.UINT8, TestImages.maxPixels(GRADIENT_PIXELS - 1)));
         assertEquals(TestImages.WIDTH,
-                JxlDecoder.decode(data, JxlLimits.defaults().withMaxPixels(GRADIENT_PIXELS)).width());
+                JxlDecoder.decode(data, 4, JxlSampleType.UINT8, TestImages.maxPixels(GRADIENT_PIXELS)).width());
     }
 
     @Test
@@ -53,17 +53,17 @@ class DecompressionBombTest {
         long pixels = (long) TestImages.PHOTO_WIDTH * TestImages.PHOTO_HEIGHT;
 
         assertThrows(JxlLimitException.class,
-                () -> JxlTranscoder.toJpeg(jxl, JxlLimits.defaults().withMaxPixels(pixels - 1)));
+                () -> JxlTranscoder.toJpeg(jxl, TestImages.maxPixels(pixels - 1)));
         assertArrayEquals(JxlTranscoder.toJpeg(jxl),
-                JxlTranscoder.toJpeg(jxl, JxlLimits.defaults().withMaxPixels(pixels)));
+                JxlTranscoder.toJpeg(jxl, TestImages.maxPixels(pixels)));
     }
 
     @Test
     void rejectsJpegReconstructionBeyondTheJpegLimit() {
         byte[] jxl = TestImages.resource(TestImages.PHOTO_CJXL_REFERENCE);
         byte[] jpeg = JxlTranscoder.toJpeg(jxl);
-        JxlLimits tooSmall = JxlLimits.defaults().withMaxJpegBytes(jpeg.length - 1);
-        JxlLimits justEnough = JxlLimits.defaults().withMaxJpegBytes(jpeg.length);
+        JxlDecodeOptions tooSmall = TestImages.maxJpegBytes(jpeg.length - 1);
+        JxlDecodeOptions justEnough = TestImages.maxJpegBytes(jpeg.length);
 
         JxlLimitException e = assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, tooSmall));
         assertEquals("Reconstructed JPEG exceeds the limit of " + (jpeg.length - 1) + " bytes", e.getMessage());
@@ -71,7 +71,7 @@ class DecompressionBombTest {
         // Small chunks make the buffer grow, which is checked against the limit, too.
         assertThrows(JxlLimitException.class, () -> JxlTranscoder.toJpeg(jxl, 1, tooSmall));
         assertThrows(JxlLimitException.class,
-                () -> JxlTranscoder.toJpeg(jxl, 1, JxlLimits.defaults().withMaxJpegBytes(16)));
+                () -> JxlTranscoder.toJpeg(jxl, 1, TestImages.maxJpegBytes(16)));
         assertArrayEquals(jpeg, JxlTranscoder.toJpeg(jxl, 1, justEnough));
     }
 
@@ -80,9 +80,9 @@ class DecompressionBombTest {
         // 3 color and 2 extra channels count twice.
         byte[] data = encode(16, 16, 16, 16, 2);
         assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.decode(data, 3, JxlSampleType.UINT8, JxlLimits.defaults().withMaxPixels(511)));
+                () -> JxlDecoder.decode(data, 3, JxlSampleType.UINT8, TestImages.maxPixels(511)));
         assertEquals(16,
-                JxlDecoder.decode(data, 3, JxlSampleType.UINT8, JxlLimits.defaults().withMaxPixels(512)).width());
+                JxlDecoder.decode(data, 3, JxlSampleType.UINT8, TestImages.maxPixels(512)).width());
     }
 
     @Test
@@ -93,9 +93,9 @@ class DecompressionBombTest {
         assertEquals(64, info.height());
 
         JxlLimitException e = assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.decode(data, 3, JxlSampleType.UINT8, JxlLimits.defaults().withMaxPixels(100_000)));
+                () -> JxlDecoder.decode(data, 3, JxlSampleType.UINT8, TestImages.maxPixels(100_000)));
         assertEquals("Frame layer of 1024 x 1024 pixels exceeds the limit of 100000 pixels", e.getMessage());
-        assertEquals(64, JxlDecoder.decode(data, 3, JxlSampleType.UINT8, JxlLimits.defaults()).width());
+        assertEquals(64, JxlDecoder.decode(data, 3, JxlSampleType.UINT8, JxlDecodeOptions.defaults()).width());
     }
 
     @Test
@@ -117,7 +117,7 @@ class DecompressionBombTest {
             byte[] truncated = Arrays.copyOf(data, length);
             // Unlimited skips the frame check, which must not change the error.
             JxlException expected = assertThrows(JxlException.class,
-                    () -> JxlDecoder.decode(truncated, 4, JxlSampleType.UINT8, JxlLimits.unlimited()));
+                    () -> JxlDecoder.decode(truncated, 4, JxlSampleType.UINT8, TestImages.unlimited()));
             JxlException actual = assertThrows(JxlException.class, () -> JxlDecoder.decode(truncated));
             assertEquals(JxlException.class, actual.getClass(), "length " + length);
             assertEquals(expected.getMessage(), actual.getMessage(), "length " + length);
@@ -134,20 +134,20 @@ class DecompressionBombTest {
         assertTrue(encoded.length < 64 * 1024, "encoded size " + encoded.length);
 
         JxlLimitException e = assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.readMetadata(encoded, JxlLimits.defaults().withMaxMetadataBytes(64 * 1024)));
+                () -> JxlDecoder.readMetadata(encoded, TestImages.maxMetadataBytes(64 * 1024)));
         assertEquals("Metadata box 'xml ' exceeds the limit of 65536 bytes", e.getMessage());
         assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.readMetadata(encoded, 1, JxlLimits.defaults().withMaxMetadataBytes(100)));
+                () -> JxlDecoder.readMetadata(encoded, 1, TestImages.maxMetadataBytes(100)));
         assertArrayEquals(xmp, JxlDecoder.readMetadata(encoded).xmp());
         assertArrayEquals(xmp,
-                JxlDecoder.readMetadata(encoded, JxlLimits.defaults().withMaxMetadataBytes(xmp.length)).xmp());
+                JxlDecoder.readMetadata(encoded, TestImages.maxMetadataBytes(xmp.length)).xmp());
     }
 
     @Test
     void unlimitedDecodesLikeTheDefaults() {
         byte[] data = TestImages.gradientJxl();
         assertArrayEquals(JxlDecoder.decode(data).pixels(),
-                ((JxlImage.Uint8) JxlDecoder.decode(data, 4, JxlSampleType.UINT8, JxlLimits.unlimited())).pixels());
+                ((JxlImage.Uint8) JxlDecoder.decode(data, 4, JxlSampleType.UINT8, TestImages.unlimited())).pixels());
     }
 
     /**

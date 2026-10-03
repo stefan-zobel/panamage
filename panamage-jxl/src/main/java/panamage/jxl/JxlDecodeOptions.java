@@ -4,7 +4,9 @@ import java.util.Objects;
 
 /**
  * Settings for decoding with {@link JxlDecoder} and {@link JxlFrameDecoder}:
- * the {@link JxlLimits} and the color space of the decoded pixels.
+ * the {@link JxlLimits} and the color space of the decoded pixels. Reading
+ * metadata and {@link JxlTranscoder#toJpeg(byte[], JxlDecodeOptions)} use
+ * only the limits.
  * {@snippet :
  * JxlImage image = JxlDecoder.decode(data, 4, JxlSampleType.UINT8,
  *         JxlDecodeOptions.defaults().withSrgb(true));

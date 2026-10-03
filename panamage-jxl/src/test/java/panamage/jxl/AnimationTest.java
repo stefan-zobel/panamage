@@ -207,34 +207,34 @@ class AnimationTest {
     void appliesThePixelLimitToAllFramesTogether() {
         byte[] data = TestImages.animationJxl();
         JxlLimitException e = assertThrows(JxlLimitException.class, () -> JxlDecoder.decodeFrames(data, 4,
-                JxlSampleType.UINT8, JxlLimits.defaults().withMaxPixels(3 * FRAME_PIXELS - 1)));
+                JxlSampleType.UINT8, TestImages.maxPixels(3 * FRAME_PIXELS - 1)));
         assertEquals("Animation of 3 frames of 16 x 12 pixels exceeds the limit of 575 pixels", e.getMessage());
         assertEquals(3, JxlDecoder.decodeFrames(data, 4, JxlSampleType.UINT8,
-                JxlLimits.defaults().withMaxPixels(3 * FRAME_PIXELS)).size());
+                TestImages.maxPixels(3 * FRAME_PIXELS)).size());
 
         // The frame decoder holds one frame at a time.
         try (JxlFrameDecoder frames = JxlFrameDecoder.open(data, 4, JxlSampleType.UINT8,
-                JxlLimits.defaults().withMaxPixels(FRAME_PIXELS))) {
+                TestImages.maxPixels(FRAME_PIXELS))) {
             frames.skip(2);
             assertArrayEquals(TestImages.animationRgbaPixels(2), pixels(frames.next()));
         }
         assertThrows(JxlLimitException.class, () -> JxlFrameDecoder.open(data, 4, JxlSampleType.UINT8,
-                JxlLimits.defaults().withMaxPixels(FRAME_PIXELS - 1)));
+                TestImages.maxPixels(FRAME_PIXELS - 1)));
     }
 
     @Test
     void checksTheLayersOfAllFrames() {
         byte[] data = encode(10, 1, 0, full(1, "", RED), full(1, "", GREEN), new Layer(0, 0, 1024, 1024, 1, "", BLUE));
-        JxlLimits limits = JxlLimits.defaults().withMaxPixels(100_000);
+        JxlDecodeOptions options = TestImages.maxPixels(100_000);
 
         JxlLimitException e = assertThrows(JxlLimitException.class,
-                () -> JxlDecoder.decodeFrames(data, 3, JxlSampleType.UINT8, limits));
+                () -> JxlDecoder.decodeFrames(data, 3, JxlSampleType.UINT8, options));
         assertEquals("Frame layer of 1024 x 1024 pixels exceeds the limit of 100000 pixels", e.getMessage());
-        assertThrows(JxlLimitException.class, () -> JxlFrameDecoder.open(data, 3, JxlSampleType.UINT8, limits));
+        assertThrows(JxlLimitException.class, () -> JxlFrameDecoder.open(data, 3, JxlSampleType.UINT8, options));
         // The first frame alone is within the limit.
-        assertEquals(SIZE, JxlDecoder.decode(data, 3, JxlSampleType.UINT8, limits).width());
+        assertEquals(SIZE, JxlDecoder.decode(data, 3, JxlSampleType.UINT8, options).width());
         assertEquals(3, JxlDecoder.decodeFrames(data, 3, JxlSampleType.UINT8).size());
-        assertEquals(3, JxlDecoder.decodeFrames(data, 3, JxlSampleType.UINT8, JxlLimits.unlimited()).size());
+        assertEquals(3, JxlDecoder.decodeFrames(data, 3, JxlSampleType.UINT8, TestImages.unlimited()).size());
     }
 
     @Test

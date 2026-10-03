@@ -21,7 +21,7 @@ class LargeImageTest {
         JxlImage.Uint8 image = noisyGradient(1024, 1024, 3);
 
         byte[] encoded = JxlEncoder.encode(image, JxlEncodeOptions.ofDistance(1.0f).withEffort(9));
-        JxlImage.Uint8 decoded = JxlDecoder.decode(encoded, 3);
+        JxlImage.Uint8 decoded = (JxlImage.Uint8) JxlDecoder.decode(encoded, 3, JxlSampleType.UINT8);
 
         assertEquals(image.width(), decoded.width());
         assertEquals(image.height(), decoded.height());
@@ -35,7 +35,7 @@ class LargeImageTest {
 
         byte[] encoded = JxlEncoder.encode(image, JxlEncodeOptions.ofLossless().withEffort(9));
 
-        assertArrayEquals(image.pixels(), JxlDecoder.decode(encoded, 4).pixels());
+        assertArrayEquals(image.pixels(), JxlDecoder.decode(encoded).pixels());
     }
 
     /** A smooth gradient with deterministic noise, which neither compresses trivially nor is pure noise. */

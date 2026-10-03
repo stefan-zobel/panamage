@@ -44,7 +44,7 @@ class HighBitDepthTest {
     @Test
     void decodesA16BitImageTo8Bits() {
         short[] reference = TestImages.gradient16Pixels();
-        byte[] pixels = JxlDecoder.decode(TestImages.gradient16Jxl(), 4).pixels();
+        byte[] pixels = JxlDecoder.decode(TestImages.gradient16Jxl()).pixels();
 
         for (int i = 0; i < reference.length; i++) {
             double expected = Short.toUnsignedInt(reference[i]) * 255.0 / 65535.0;

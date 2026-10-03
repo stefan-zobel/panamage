@@ -286,7 +286,7 @@ public final class JxlImageReader extends ImageReader {
         JxlImageInfo imageInfo = info();
         if (boxes == null) {
             try {
-                boxes = input().readMetadata(limits);
+                boxes = input().readMetadata(JxlDecodeOptions.defaults().withLimits(limits));
             } catch (JxlException e) {
                 throw new IIOException("Cannot read JPEG XL metadata: " + e.getMessage(), e);
             }
