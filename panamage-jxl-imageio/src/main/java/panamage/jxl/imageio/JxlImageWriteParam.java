@@ -16,8 +16,11 @@ import panamage.jxl.JxlThreads;
  * (1.0 is lossless), and {@value #LOSSLESS} encodes bit-exact. In every mode,
  * {@link #setEffort(int)} trades encoding speed for file size, and
  * {@link #setThreads(JxlThreads)} sets how many native threads libjxl uses
- * (by default as many as the image size suggests). Without explicit settings,
- * images are encoded lossy at distance 1.0 (visually lossless).
+ * (by default as many as the image size suggests). Without explicit settings
+ * (no parameter, or the modes {@link #MODE_DEFAULT} and
+ * {@link #MODE_COPY_FROM_METADATA}), palette images such as GIFs and 8-bit
+ * PNGs are encoded losslessly, which keeps them small, and all other images
+ * lossy at distance 1.0 (visually lossless).
  * {@snippet :
  * JxlImageWriteParam param = (JxlImageWriteParam) writer.getDefaultWriteParam();
  * param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
@@ -121,6 +124,29 @@ public class JxlImageWriteParam extends ImageWriteParam {
         JxlThreads threads = param instanceof JxlImageWriteParam jxlParam ? jxlParam.getThreads()
                 : JxlThreads.auto();
         return compression(param).withThreads(threads);
+    }
+
+    /**
+     * Converts a write parameter like {@link #toOptions(ImageWriteParam)}, but
+     * encodes a palette image losslessly unless the parameter sets the
+     * compression explicitly.
+     *
+     * @param palette whether the image is a palette image or comes from a GIF
+     */
+    static JxlEncodeOptions toOptions(ImageWriteParam param, boolean palette) {
+        if (!palette || isExplicit(param)) {
+            return toOptions(param);
+        }
+        if (param instanceof JxlImageWriteParam jxlParam) {
+            return JxlEncodeOptions.ofLossless().withEffort(jxlParam.getEffort()).withThreads(jxlParam.getThreads());
+        }
+        return JxlEncodeOptions.ofLossless();
+    }
+
+    /** Whether the parameter chooses the compression itself. */
+    private static boolean isExplicit(ImageWriteParam param) {
+        return param != null && param.canWriteCompressed()
+                && (param.getCompressionMode() == MODE_EXPLICIT || param.getCompressionMode() == MODE_DISABLED);
     }
 
     /** Converts the compression settings and the effort. */

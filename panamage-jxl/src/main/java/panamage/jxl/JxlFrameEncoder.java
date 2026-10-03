@@ -16,11 +16,13 @@ import java.util.List;
 import java.util.Objects;
 
 import panamage.jxl.ffi.Jxl;
+import panamage.jxl.ffi.JxlBlendInfo;
 import panamage.jxl.ffi.JxlFrameHeader;
+import panamage.jxl.ffi.JxlLayerInfo;
 
 /**
  * Encodes a JPEG XL animation one frame at a time and writes the output as it
- * is produced, so only about one frame is held in memory.
+ * is produced, so only the current and the previous frame are held in memory.
  * {@snippet :
  * try (OutputStream out = Files.newOutputStream(path);
  *         JxlFrameEncoder frames = JxlFrameEncoder.open(out, JxlAnimationHeader.millis(0),
@@ -37,7 +39,10 @@ import panamage.jxl.ffi.JxlFrameHeader;
  * {@link JxlImage}s or all {@link JxlChannels} with the same extra channels,
  * for example the slices or time points of a stack of microscope images
  * (JPEG XL has no further dimensions, so a stack is stored as an animation).
- * Every frame covers the whole image and replaces the previous one. Frame
+ * Every frame covers the whole image and replaces the previous one. Only the
+ * area that differs from the previous frame is encoded, as a frame cropped to
+ * that area, so animations with little movement stay small; decoders show the
+ * same images as for full frames. Frame
  * durations are given in ticks of the {@link JxlAnimationHeader}; a frame
  * with a duration of 0 is only allowed as the last frame, because decoders
  * combine it with the following frame. The same {@link JxlEncodeOptions}
@@ -65,6 +70,12 @@ public final class JxlFrameEncoder implements AutoCloseable {
     /** The longest frame duration, in ticks (an unsigned 32-bit number). */
     static final long MAX_DURATION_TICKS = 0xFFFF_FFFFL;
 
+    /**
+     * The reference slot every frame is saved to, so that the next frame can
+     * replace only a part of it (slot 3 is reserved for libjxl).
+     */
+    private static final int REFERENCE = 1;
+
     private final Arena arena;
     private final NativeEncoder encoder;
     private final OutputSink sink;
@@ -77,6 +88,10 @@ public final class JxlFrameEncoder implements AutoCloseable {
     /** The interleaved samples of a pending {@link JxlImage}, or the color channels of {@link JxlChannels}. */
     private MemorySegment pending;
     private final List<MemorySegment> pendingExtra = new ArrayList<>();
+    /** The samples of the frame encoded before the pending one, in the same layout, for finding the changes. */
+    private MemorySegment previous;
+    private final List<MemorySegment> previousExtra = new ArrayList<>();
+    private boolean hasPrevious;
     private long pendingDuration;
     private String pendingName;
     private boolean finished;
@@ -401,31 +416,101 @@ public final class JxlFrameEncoder implements AutoCloseable {
         int sampleBytes = layout.sampleType().bytesPerSample();
         long planeBytes = (long) layout.width() * layout.height() * sampleBytes;
         pending = arena.allocate(planeBytes * layout.channels(), sampleBytes);
+        previous = arena.allocate(planeBytes * layout.channels(), sampleBytes);
         for (int i = 0; i < layout.extraChannels().size(); i++) {
             pendingExtra.add(arena.allocate(planeBytes, sampleBytes));
+            previousExtra.add(arena.allocate(planeBytes, sampleBytes));
         }
         first = layout;
     }
 
-    /** Hands the pending frame to libjxl, which encodes it on the next output call. */
+    /**
+     * Hands the pending frame to libjxl, which encodes it on the next output
+     * call. Of every frame after the first, only the area that differs from
+     * the previous frame is handed over; it replaces that area of the previous
+     * frame, which every frame is saved as.
+     */
     private void queuePending(Arena call) {
+        int width = first.width();
+        int height = first.height();
+        int sampleBytes = first.sampleType().bytesPerSample();
+        int pixelBytes = first.channels() * sampleBytes;
+        FrameRegion region = null;
+        if (hasPrevious) {
+            region = FrameRegion.changed(pending, previous, width, height, pixelBytes);
+            for (int i = 0; i < pendingExtra.size(); i++) {
+                region = FrameRegion.union(region,
+                        FrameRegion.changed(pendingExtra.get(i), previousExtra.get(i), width, height, sampleBytes));
+            }
+            if (region == null) {
+                // Nothing changed: one unchanged pixel keeps the frame valid and small.
+                region = new FrameRegion(0, 0, 1, 1);
+            }
+        }
+        boolean crop = region != null && !region.covers(width, height);
+
         MemorySegment frameHeader = call.allocate(JxlFrameHeader.layout());
         Jxl.JxlEncoderInitFrameHeader(frameHeader);
         // The duration is uint32 in C and checked to be in that range.
         JxlFrameHeader.duration(frameHeader, (int) pendingDuration);
+        MemorySegment layer = JxlFrameHeader.layer_info(frameHeader);
+        JxlLayerInfo.save_as_reference(layer, REFERENCE);
+        if (crop) {
+            JxlLayerInfo.have_crop(layer, Jxl.JXL_TRUE());
+            JxlLayerInfo.crop_x0(layer, region.x());
+            JxlLayerInfo.crop_y0(layer, region.y());
+            JxlLayerInfo.xsize(layer, region.width());
+            JxlLayerInfo.ysize(layer, region.height());
+            replaceReference(JxlLayerInfo.blend_info(layer));
+        }
         encoder.check(Jxl.JxlEncoderSetFrameHeader(settings, frameHeader), "JxlEncoderSetFrameHeader");
         encoder.check(Jxl.JxlEncoderSetFrameName(settings, call.allocateFrom(pendingName)),
                 "JxlEncoderSetFrameName");
+        if (crop && !pendingExtra.isEmpty()) {
+            MemorySegment blend = call.allocate(JxlBlendInfo.layout());
+            Jxl.JxlEncoderInitBlendInfo(blend);
+            replaceReference(blend);
+            for (int i = 0; i < pendingExtra.size(); i++) {
+                encoder.check(Jxl.JxlEncoderSetExtraChannelBlendInfo(settings, i, blend),
+                        "JxlEncoderSetExtraChannelBlendInfo");
+            }
+        }
+
         JxlSampleType type = first.sampleType();
+        MemorySegment color = crop ? cropped(pending, region, pixelBytes, sampleBytes, call) : pending;
         encoder.check(Jxl.JxlEncoderAddImageFrame(settings, JxlEncoder.pixelFormat(first.channels(), type, call),
-                pending, pending.byteSize()), "JxlEncoderAddImageFrame");
+                color, color.byteSize()), "JxlEncoderAddImageFrame");
         // libjxl ignores the number of channels of an extra channel buffer.
         MemorySegment format = JxlEncoder.pixelFormat(1, type, call);
         for (int i = 0; i < pendingExtra.size(); i++) {
-            MemorySegment plane = pendingExtra.get(i);
+            MemorySegment plane = crop ? cropped(pendingExtra.get(i), region, sampleBytes, sampleBytes, call)
+                    : pendingExtra.get(i);
             encoder.check(Jxl.JxlEncoderSetExtraChannelBuffer(settings, format, plane, plane.byteSize(), i),
                     "JxlEncoderSetExtraChannelBuffer");
         }
+
+        // libjxl has copied the samples, so the pending buffers now keep the previous frame.
+        MemorySegment swap = previous;
+        previous = pending;
+        pending = swap;
+        for (int i = 0; i < pendingExtra.size(); i++) {
+            previousExtra.set(i, pendingExtra.set(i, previousExtra.get(i)));
+        }
+        hasPrevious = true;
+    }
+
+    /** Replaces the area of the frame in the reference frame of the previous frame. */
+    private static void replaceReference(MemorySegment blendInfo) {
+        JxlBlendInfo.blendmode(blendInfo, Jxl.JXL_BLEND_REPLACE());
+        JxlBlendInfo.source(blendInfo, REFERENCE);
+    }
+
+    /** Copies a rectangle of a whole frame into a buffer of the call. */
+    private MemorySegment cropped(MemorySegment image, FrameRegion region, int pixelBytes, int sampleBytes,
+            Arena call) {
+        MemorySegment target = call.allocate((long) region.width() * region.height() * pixelBytes, sampleBytes);
+        region.copy(image, first.width(), pixelBytes, target);
+        return target;
     }
 
     private void copyToPending(Object image) {

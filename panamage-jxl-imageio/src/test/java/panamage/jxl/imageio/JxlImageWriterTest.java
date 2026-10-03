@@ -171,6 +171,41 @@ class JxlImageWriterTest {
         assertEquals(JxlThreads.auto(), JxlImageWriteParam.toOptions(new ImageWriteParam(null)).threads());
     }
 
+    @Test
+    void paletteImagesAreWrittenLosslesslyByDefault() throws IOException {
+        BufferedImage indexed = new BufferedImage(Resources.GRADIENT_WIDTH, Resources.GRADIENT_HEIGHT,
+                BufferedImage.TYPE_BYTE_INDEXED);
+        indexed.getGraphics().drawImage(gradient(BufferedImage.TYPE_INT_RGB), 0, 0, null);
+        byte[] lossless = write(indexed, lossless());
+
+        assertArrayEquals(lossless, write(indexed, null));
+        ImageWriteParam copy = new JxlImageWriteParam(null);
+        copy.setCompressionMode(ImageWriteParam.MODE_COPY_FROM_METADATA);
+        assertArrayEquals(lossless, write(indexed, copy));
+        assertArrayEquals(JxlImageReaderTest.argb(indexed), JxlImageReaderTest.argb(JxlImageReaderTest.read(
+                write(indexed, null))));
+        // An explicit setting wins, and other images stay lossy by default.
+        assertFalse(Arrays.equals(lossless, write(indexed, quality(0.9f))));
+        BufferedImage rgb = gradient(BufferedImage.TYPE_INT_RGB);
+        assertFalse(Arrays.equals(write(rgb, lossless()), write(rgb, null)));
+    }
+
+    @Test
+    void paletteDefaultKeepsEffortAndThreads() {
+        JxlImageWriteParam param = new JxlImageWriteParam(null);
+        param.setEffort(3);
+        param.setThreads(JxlThreads.none());
+        assertEquals(JxlEncodeOptions.ofLossless().withEffort(3).withThreads(JxlThreads.none()),
+                JxlImageWriteParam.toOptions(param, true));
+        assertEquals(JxlEncodeOptions.defaults().withEffort(3).withThreads(JxlThreads.none()),
+                JxlImageWriteParam.toOptions(param, false));
+        assertEquals(JxlEncodeOptions.ofLossless(), JxlImageWriteParam.toOptions(null, true));
+        assertEquals(JxlEncodeOptions.ofLossless(), JxlImageWriteParam.toOptions(new ImageWriteParam(null), true));
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionType(JxlImageWriteParam.LOSSY);
+        assertFalse(JxlImageWriteParam.toOptions(param, true).lossless());
+    }
+
     /** A 64x48 image with the pixels of gradient.rgba (alpha dropped for opaque types). */
     private static BufferedImage gradient(int type) {
         BufferedImage image = new BufferedImage(Resources.GRADIENT_WIDTH, Resources.GRADIENT_HEIGHT, type);

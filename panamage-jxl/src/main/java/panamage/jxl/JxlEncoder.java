@@ -247,7 +247,8 @@ public final class JxlEncoder {
      * duration in milliseconds is ignored. All frames must have the size, the
      * channels, the sample type and the ICC profile of the first frame, and
      * only the last frame may have a duration of 0. Every frame covers the
-     * whole image. With metadata, the output uses the JPEG XL container
+     * whole image; only the area that differs from the previous frame is
+     * encoded. With metadata, the output uses the JPEG XL container
      * format. To write the output piece by piece, or to add frames one at a
      * time, use {@link JxlFrameEncoder}.
      *

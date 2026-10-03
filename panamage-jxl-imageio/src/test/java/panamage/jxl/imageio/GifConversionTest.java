@@ -1,5 +1,6 @@
 package panamage.jxl.imageio;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -125,14 +126,32 @@ class GifConversionTest {
         assertEquals(new JxlFrameInfo(25, 250.0, ""), metadata.getFrameInfo());
     }
 
+    @Test
+    void gifsAreWrittenLosslesslyWithoutParameters() throws IOException {
+        byte[] gif = gif(WIDTH, HEIGHT, 3,
+                new GifFrame(fill(WIDTH, HEIGHT, RED), 0, 0, "none", 10),
+                new GifFrame(fill(3, 3, BLUE), 1, 1, "none", 20));
+
+        for (boolean withStreamMetadata : new boolean[] {true, false}) {
+            assertArrayEquals(convert(gif, withStreamMetadata), convert(gif, withStreamMetadata, null),
+                    "stream metadata " + withStreamMetadata);
+        }
+    }
+
     /** Reads every frame with the JDK's GIF reader and writes them as a lossless JPEG XL sequence. */
     private static byte[] convert(byte[] gif, boolean withStreamMetadata) throws IOException {
-        ImageReader gifReader = gifReader(gif);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageWriter writer = new JxlImageWriter(new JxlImageWriterSpi());
         JxlImageWriteParam lossless = new JxlImageWriteParam(null);
         lossless.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
         lossless.setCompressionType(JxlImageWriteParam.LOSSLESS);
+        return convert(gif, withStreamMetadata, lossless);
+    }
+
+    /** Reads every frame with the JDK's GIF reader and writes them as a JPEG XL sequence. */
+    private static byte[] convert(byte[] gif, boolean withStreamMetadata, ImageWriteParam lossless)
+            throws IOException {
+        ImageReader gifReader = gifReader(gif);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageWriter writer = new JxlImageWriter(new JxlImageWriterSpi());
         try (ImageOutputStream output = ImageIO.createImageOutputStream(out)) {
             writer.setOutput(output);
             writer.prepareWriteSequence(withStreamMetadata ? gifReader.getStreamMetadata() : null);

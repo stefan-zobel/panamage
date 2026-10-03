@@ -2,6 +2,7 @@ package panamage.jxl.imageio;
 
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
+import java.awt.image.IndexColorModel;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -63,7 +64,9 @@ import panamage.jxl.JxlMetadata;
  * cover only part of the animation are composed as browsers show them, with
  * their position and disposal method; pass the reader's stream metadata to
  * {@link #prepareWriteSequence} for the size of the animation, otherwise the
- * first frame sets it. Composed frames have an alpha channel.
+ * first frame sets it. Composed frames have an alpha channel. Without
+ * explicit compression settings, GIF animations, like all palette images, are
+ * written losslessly (see {@link JxlImageWriteParam}).
  * {@snippet :
  * ImageReader gif = ImageIO.getImageReadersByFormatName("gif").next();
  * gif.setInput(ImageIO.createImageInputStream(gifFile));
@@ -193,7 +196,7 @@ public final class JxlImageWriter extends ImageWriter {
         }
         JxlMetadata metadata = frame.metadata() == null ? JxlMetadata.NONE : frame.metadata().toJxlMetadata();
         try {
-            JxlEncoder.encode(frame.pixels(), JxlImageWriteParam.toOptions(param), metadata,
+            JxlEncoder.encode(frame.pixels(), JxlImageWriteParam.toOptions(param, isPalette(image)), metadata,
                     new StreamAdapter(output));
         } catch (JxlException e) {
             throw new IIOException("Cannot encode JPEG XL image: " + e.getMessage(), e);
@@ -201,6 +204,16 @@ public final class JxlImageWriter extends ImageWriter {
         output.flush();
         processImageProgress(100.0f);
         processImageComplete();
+    }
+
+    /** Whether an image has a palette or comes from a GIF, so that it is encoded losslessly by default. */
+    private static boolean isPalette(IIOImage image) {
+        if (image == null) {
+            return false;
+        }
+        RenderedImage rendered = image.getRenderedImage();
+        return rendered != null && rendered.getColorModel() instanceof IndexColorModel
+                || image.getMetadata() != null && GifMetadata.isSupported(image.getMetadata());
     }
 
     /**
@@ -255,6 +268,7 @@ public final class JxlImageWriter extends ImageWriter {
         if (!sequenceStarted) {
             throw new IllegalStateException("prepareWriteSequence was not called");
         }
+        boolean palette = isPalette(image) || gifScreen != null;
         Frame frame = prepare(composeGif(image), param, sequenceIndex);
         if (frame == null) {
             return;
@@ -265,7 +279,7 @@ public final class JxlImageWriter extends ImageWriter {
                 JxlAnimationHeader header = metadata == null ? null : metadata.getAnimationHeader();
                 sequenceHeader = header == null ? JxlAnimationHeader.millis(0) : header;
                 sequence = JxlFrameEncoder.open(new StreamAdapter(sequenceOutput), sequenceHeader,
-                        JxlImageWriteParam.toOptions(param),
+                        JxlImageWriteParam.toOptions(param, palette),
                         metadata == null ? JxlMetadata.NONE : metadata.toJxlMetadata());
             }
             JxlFrameInfo info = metadata == null ? null : metadata.getFrameInfo();
