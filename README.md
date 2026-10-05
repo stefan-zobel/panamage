@@ -526,7 +526,10 @@ Plain gray and RGB images are standard JPEG XL files that any viewer shows.
 Hyperstacks are stored as frames, with their layout and metadata in a box of
 their own (`ijmd`); other software shows them as an animation of the first
 channel. For exchanging microscopy data with other software, OME-TIFF and
-OME-Zarr remain the better choice. RGB images with alpha open as RGB.
+OME-Zarr remain the better choice. 8-bit RGB images open as RGB color
+images, without the alpha channel (as ImageJ opens PNG files); images with
+more bits per sample open as a composite image with one channel per color and
+alpha.
 
 If saving or opening reports that JPEG XL support "needs Java 21 with preview
 features", Fiji was not restarted after the installation or
