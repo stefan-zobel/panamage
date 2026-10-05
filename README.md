@@ -59,6 +59,9 @@ bundled; nothing needs to be installed.
   interface on both the class path and the module path.
 - **JDK 21:** `panamage-jxl-jdk21` offers the same API on JDK 21, where the
   Foreign Function and Memory API is a preview feature.
+- **ImageJ and Fiji plugin:** open and save JPEG XL in Fiji with all
+  channels, slices, time points and calibration, installed from the update
+  site `Panamage`.
 - **Tested against the reference images** of selected test cases of the
   official [JPEG XL conformance corpus](https://github.com/libjxl/conformance)
   (gray, float, alpha, orientation, animation, JPEG reconstruction).
@@ -134,9 +137,8 @@ For your own application, put these JARs on the class path or module path:
 | `panamage-jxl-spi` | Service interface for the native libraries |
 | `panamage-jxl-natives-<platform>` (`windows-x86_64`, `linux-x86_64`, `linux-aarch64`, `linux-musl-x86_64`, `linux-musl-aarch64` or `macos-aarch64`) | libjxl for the platform |
 
-A plugin for ImageJ and Fiji, `panamage-jxl-imagej`, is attached to the
-[Releases](../../releases) page; it is not on Maven Central. A Fiji update
-site will follow.
+Fiji users install the plugin from an update site instead (see
+[ImageJ and Fiji](#imagej-and-fiji)).
 
 ## Usage
 
@@ -471,6 +473,71 @@ as for JDK 22 and newer:
 - It is not part of the release archives; the JAR is attached to the GitHub
   release.
 
+## ImageJ and Fiji
+
+The plugin `panamage-jxl-imagej` opens and saves JPEG XL files in
+[Fiji](https://fiji.sc/). It keeps everything an ImageJ image has: channels,
+slices and time points, calibration, lookup tables, display ranges, slice
+labels, the info text and signed 16-bit data. Lossless files come back
+bit-exact.
+
+On the Fiji sample images, lossless JPEG XL files at effort 7 were 15 to 51
+percent smaller than the smallest compressed TIFF (LZW, Deflate or Zstandard
+with predictor, or TIFF in ZIP), but took 5 to 14 times as long to save as
+TIFF in ZIP. The default effort 3 gives almost the same total size in a
+fraction of the time. Opening takes about 5 to 10 times as long as TIFF.
+
+Requirements: Fiji "latest" with Java 21 (Help > About ImageJ shows the Java
+version; Fiji "stable" runs Java 8, where the plugin does nothing) on Windows
+x86_64, Linux x86_64 or aarch64, or macOS on Apple silicon.
+
+Installation:
+
+1. Help > Update... and wait until the updater has checked the installation.
+2. Click "Manage Update Sites".
+3. Click "Add Unlisted Site", enter the name `Panamage` and the URL
+   `https://sites.imagej.net/Panamage/`, tick the new row if it is not ticked,
+   and close the dialog.
+4. Click "Apply Changes" and restart Fiji. The restart is required: the
+   update site installs `config/jaunch/extra-panamage.toml`, which makes Fiji
+   start Java 21 with `--enable-preview`.
+
+File > Save As then shows "JPEG XL...", and dropping a `.jxl` file on the
+Fiji window opens it.
+
+Use:
+
+- File > Open, drag and drop, File > Open Recent and the macro function
+  `open` read `.jxl` files, in batch mode, too.
+- File > Save As > JPEG XL... writes them: lossless, or lossy with a
+  Butteraugli distance (1.0 is visually lossless), with an effort from 1 to
+  10 (3 by default: higher efforts make lossless files only a few percent
+  smaller, but take many times longer). Images with three or more channels
+  can store channels 1 to 3 as RGB color. Lossy files are not meant for
+  measurements.
+- In a macro:
+
+  ```
+  run("JPEG XL...", "compression=Lossless effort=3 save=/path/image.jxl");
+  run("JPEG XL...", "compression=Lossy distance=1.0 effort=7 save=/path/photo.jxl");
+  ```
+
+Plain gray and RGB images are standard JPEG XL files that any viewer shows.
+Hyperstacks are stored as frames, with their layout and metadata in a box of
+their own (`ijmd`); other software shows them as an animation of the first
+channel. For exchanging microscopy data with other software, OME-TIFF and
+OME-Zarr remain the better choice. RGB images with alpha open as RGB.
+
+If saving or opening reports that JPEG XL support "needs Java 21 with preview
+features", Fiji was not restarted after the installation or
+`config/jaunch/extra-panamage.toml` is missing; "needs Java 21, but Fiji runs
+on Java N" means a Fiji with another Java. To uninstall the plugin, untick
+`Panamage` in Manage Update Sites and click Apply Changes.
+
+The plugin runs on `panamage-jxl-jdk21`; the update site installs it with the
+native library for the platform. The JAR of the plugin is also attached to
+the [Releases](../../releases) page; it is not on Maven Central.
+
 ## Native libraries
 
 The native libraries are loaded on first use from the first of these sources:
@@ -569,7 +636,7 @@ Other scripts in `scripts/`:
 | `build_libjxl_windows.py` | Build the libjxl DLLs for Windows x86_64 from source with the static runtime (Visual Studio with clang-cl; used by the workflow below) |
 | `make_jdk21_variant.py` | Generate the sources of `panamage-jxl-jdk21` (`--generate`, run by Maven) and regenerate its checked-in jextract 21 bindings (`--update-bindings`) |
 | `write_toolchains.py` | Write a Maven toolchains file for a JDK 25 and, with `--jdk21`, a JDK 21 |
-| `make_update_site.py` | Build the Fiji update site from the release files and upload it (`--site NAME --webdav-user USER`, or `--local-site DIR` for a test) |
+| `make_update_site.py` | Build the Fiji update site from the release files and upload it (`--site NAME --webdav-user USER`, or `--local-site DIR` for a test; `--version` for a release other than the POM version) |
 
 Every build also creates sources and Javadoc JARs. The JARs are reproducible:
 `project.build.outputTimestamp` fixes the time stamps, so the same sources
@@ -601,7 +668,15 @@ Releases are built and uploaded by hand:
 4. Tag the release commit and create the GitHub release with the other files
    of `dist/<version>`, including `SHA256SUMS`, `panamage-jxl-jdk21` and the
    ImageJ/Fiji plugin `panamage-jxl-imagej`.
-5. Update the Fiji update site with `make_update_site.py`.
+5. Upload the plugin to the Fiji update site from a separate Fiji "latest"
+   installation; the updater asks for the password:
+
+   ```sh
+   python scripts/make_update_site.py --fiji <Fiji> --site Panamage --webdav-user <user>
+   ```
+
+   `--simulate` first lists the files it would upload. After step 6,
+   `--version <release>` uploads the release from `dist/<release>`.
 6. Set the next snapshot version.
 
 ## Continuous integration
