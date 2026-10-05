@@ -17,7 +17,9 @@ files in the Fiji installation are removed first.
 
 The JARs come from dist/<version>/ (see make_release.py) or, with
 --from-target, from the target directories of the modules after a build with
-the profile jdk21, for example to try out a snapshot.
+the profile jdk21, for example to try out a snapshot. The version is the one
+in pom.xml unless --version names another, for example a release in dist/
+after pom.xml has moved on to the next snapshot.
 
 The upload goes to the personal update site NAME on sites.imagej.net
 (https://sites.imagej.net/NAME/) as the given WebDAV user; the updater asks
@@ -30,7 +32,8 @@ directly with Fiji's Java, because the Fiji launcher hides its output on
 Windows. Its first run checksums the whole installation and takes a while.
 
 Usage:
-  python make_update_site.py --fiji DIR [--from-target] [--simulate]
+  python make_update_site.py --fiji DIR [--version VERSION] [--from-target]
+                             [--simulate]
                              (--site NAME --webdav-user USER | --local-site DIR)
 """
 
@@ -134,6 +137,7 @@ def ensure_site(java: Path, fiji: Path, name: str, url: str, host: str, director
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--fiji", type=Path, required=True, help="the Fiji installation to upload from")
+    parser.add_argument("--version", help="the version to upload (default: the version in pom.xml)")
     parser.add_argument("--from-target", action="store_true",
                         help="take the JARs from the target directories instead of dist/<version>")
     parser.add_argument("--simulate", action="store_true", help="only show what would be uploaded")
@@ -149,7 +153,7 @@ def main() -> int:
     if not list((fiji / "jars").glob("imagej-updater-*.jar")):
         raise SystemExit(f"{fiji} is not a Fiji installation (no jars/imagej-updater-*.jar)")
     java = fiji_java(fiji)
-    version, _ = pom_values()
+    version = args.version or pom_values()[0]
     if args.site and version.endswith("-SNAPSHOT") and not args.simulate:
         raise SystemExit(f"Version {version} is a snapshot; upload snapshots only to a --local-site")
     files = site_files(version, args.from_target)
